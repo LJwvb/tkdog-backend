@@ -1,4 +1,4 @@
-import { EggAppConfig, EggAppInfo, PowerPartial } from 'egg';
+import { Context, EggAppConfig, EggAppInfo, PowerPartial } from 'egg';
 
 export default (appInfo: EggAppInfo) => {
   const config = {} as PowerPartial<EggAppConfig>;
@@ -33,10 +33,11 @@ export default (appInfo: EggAppInfo) => {
     // 是否加载到 agent 上，默认关闭
     agent: false,
   };
-  // 跨域
+  // 跨域：反射请求 Origin 并允许携带凭证（前端 axios 开启了 withCredentials）
   config.cors = {
-    origin: '*',
+    origin: (ctx: Context) => ctx.get('origin'),
     allowMethods: 'GET,HEAD,PUT,POST,DELETE,PATCH',
+    credentials: true,
   };
 
   // the return config will combines to EggAppConfig

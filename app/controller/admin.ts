@@ -13,6 +13,17 @@ export default class admin extends Controller {
     }
     const data = await ctx.service.admin.adminLogin(ctx.request.body);
     if (data) {
+      // 管理员身份写入独立 cookie（ADMIN_SESS），与普通用户 session 完全隔离，互不覆盖
+      ctx.cookies.set(
+        'ADMIN_SESS',
+        JSON.stringify({ id: data.id, name: data.name }),
+        {
+          httpOnly: true,
+          signed: true,
+          maxAge: 24 * 3600 * 1000,
+          overwrite: true,
+        },
+      );
       const returnData = removePassword(data);
       ctx.success(returnData, '登录成功');
     } else {
@@ -38,14 +49,22 @@ export default class admin extends Controller {
   public async getUserList() {
     const { ctx } = this;
 
-    const result = await ctx.service.admin.getUserList();
+    const result = await ctx.service.admin.getUserList(ctx.request.body);
 
     if (result) {
-      // 去除密码
-      // const returnData = removePassword(result);
       ctx.success(result, '请求成功');
     } else {
       ctx.fail('获取用户列表失败');
+    }
+  }
+  // 首页统计
+  public async getStatistics() {
+    const { ctx } = this;
+    const result = await ctx.service.admin.getStatistics();
+    if (result) {
+      ctx.success(result, '请求成功');
+    } else {
+      ctx.fail('获取统计信息失败');
     }
   }
   // 获取未审核题目
@@ -167,6 +186,76 @@ export default class admin extends Controller {
       ctx.success(null, '删除成功~');
     } else {
       ctx.fail('删除失败,请重新删除~');
+    }
+  }
+  // ===== 已删除数据 + 恢复 =====
+  public async getDeletedQuestions() {
+    const { ctx } = this;
+    const result = await ctx.service.admin.getDeletedQuestions(ctx.request.body);
+    if (result) {
+      ctx.success(result, '请求成功');
+    } else {
+      ctx.fail('获取失败~');
+    }
+  }
+  public async restoreQuestion() {
+    const { ctx } = this;
+    const { id } = ctx.request.body;
+    if (!id) {
+      ctx.fail('id不能为空~');
+      return;
+    }
+    const result = await ctx.service.admin.restoreQuestion(id);
+    if (result) {
+      ctx.success(null, '已恢复~');
+    } else {
+      ctx.fail('恢复失败~');
+    }
+  }
+  public async getDeletedPapers() {
+    const { ctx } = this;
+    const result = await ctx.service.admin.getDeletedPapers(ctx.request.body);
+    if (result) {
+      ctx.success(result, '请求成功');
+    } else {
+      ctx.fail('获取失败~');
+    }
+  }
+  public async restorePaper() {
+    const { ctx } = this;
+    const { paperId } = ctx.request.body;
+    if (!paperId) {
+      ctx.fail('paperId不能为空~');
+      return;
+    }
+    const result = await ctx.service.admin.restorePaper(paperId);
+    if (result) {
+      ctx.success(null, '已恢复~');
+    } else {
+      ctx.fail('恢复失败~');
+    }
+  }
+  public async getDeletedUsers() {
+    const { ctx } = this;
+    const result = await ctx.service.admin.getDeletedUsers();
+    if (result) {
+      ctx.success(result, '请求成功');
+    } else {
+      ctx.fail('获取失败~');
+    }
+  }
+  public async restoreUser() {
+    const { ctx } = this;
+    const { userId } = ctx.request.body;
+    if (!userId) {
+      ctx.fail('userId不能为空~');
+      return;
+    }
+    const result = await ctx.service.admin.restoreUser(userId);
+    if (result) {
+      ctx.success(null, '已恢复~');
+    } else {
+      ctx.fail('恢复失败~');
     }
   }
 }

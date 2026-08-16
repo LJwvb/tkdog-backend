@@ -36,8 +36,24 @@ export default class questions extends Controller {
       ctx.fail('请填写完整信息~');
       return;
     }
+    const combined = [
+      question,
+      answer,
+      ctx.request.body.questionDetail,
+      ctx.request.body.tags,
+    ]
+      .filter(Boolean)
+      .join(' ');
+    const check = await ctx.service.sensitiveWord.check(combined);
+    if (check.blocked) {
+      ctx.fail('题目内容包含违禁词，请修改后重试~');
+      return;
+    }
     const result = await ctx.service.questions.uploadQuestions({
       ...ctx.request.body,
+      // 从 session 取上传者身份，不信任前端传入；优先普通用户 session，未登录普通用户时才用管理员身份
+      creator: ctx.currentUsername() || ctx.currentAdminName(),
+      userId: ctx.currentUserId(),
       addDate: getNowFormatDate(),
       chkState: 0,
       isChoice: 0,
@@ -48,6 +64,78 @@ export default class questions extends Controller {
       ctx.success(null, '上传成功,请等待审核~');
     } else {
       ctx.fail('上传失败,请重新上传~');
+    }
+  }
+  // 编辑题目（管理员，用于按纠错反馈修正题目）
+  public async updateQuestion() {
+    const { ctx } = this;
+    const { id, question, answer, difficulty, tags } = ctx.request.body;
+    if (!id || !question || !answer) {
+      ctx.fail('请填写完整信息~');
+      return;
+    }
+    const combined = [ question, answer, tags ].filter(Boolean).join(' ');
+    const check = await ctx.service.sensitiveWord.check(combined);
+    if (check.blocked) {
+      ctx.fail('题目内容包含违禁词，请修改后重试~');
+      return;
+    }
+    const result = await ctx.service.questions.updateQuestion({
+      id: Number(id),
+      question,
+      answer,
+      difficulty,
+      tags: tags || '',
+    });
+    if (result) {
+      ctx.success(null, '修改成功~');
+    } else {
+      ctx.fail('修改失败~');
+    }
+  }
+  // 批量导入题目
+  public async importQuestions() {
+    const { ctx } = this;
+    const { questions } = ctx.request.body;
+    if (!Array.isArray(questions) || questions.length === 0) {
+      ctx.fail('没有可导入的题目~');
+      return;
+    }
+    // 违禁词检测：任一题目的题干/答案/标签/详情命中拦截词即整体拒绝
+    const combined = questions
+      .map((q: any) =>
+        [ q?.question, q?.answer, q?.tags, q?.questionDetail ].filter(Boolean).join(' '),
+      )
+      .join(' ');
+    const check = await ctx.service.sensitiveWord.check(combined);
+    if (check.blocked) {
+      ctx.fail('导入数据包含违禁词，请检查后重试~');
+      return;
+    }
+    const result = await ctx.service.questions.importQuestions({
+      questions,
+      creator: ctx.currentUsername() || ctx.currentAdminName(),
+      // 管理员导入不写入「用户上传」关联（管理员不属于 user 表）
+      userId: ctx.currentUserId(),
+      isAdmin: ctx.isAdmin() && !ctx.currentUserId(),
+    });
+    if (result) {
+      ctx.success(result, `成功导入 ${result.imported} 道题目`);
+    } else {
+      ctx.fail('导入失败，请检查数据格式~');
+    }
+  }
+
+  // 智能组卷：随机抽题
+  public async randomPickQuestions() {
+    const { ctx } = this;
+    const result = await ctx.service.questions.randomPickQuestions(
+      ctx.request.body,
+    );
+    if (result) {
+      ctx.success(result, '请求成功');
+    } else {
+      ctx.fail('抽题失败~');
     }
   }
 
@@ -64,15 +152,19 @@ export default class questions extends Controller {
   // 点赞题目
   public async likeQuestions() {
     const { ctx } = this;
-    const { id, creator, username } = ctx.request.body;
-    if (!id || !creator || !username) {
+    const { id } = ctx.request.body;
+    if (!id) {
       ctx.fail('请填写完整信息~');
+      return;
+    }
+    if (!(await ctx.service.questions.isApproved(id))) {
+      ctx.fail('该题目未通过审核，无法点赞~');
       return;
     }
     const result = await ctx.service.questions.likeQuestions({
       id,
-      creator,
-      username,
+      // 从 session 取点赞用户 ID，不信任前端传入
+      userId: ctx.currentUserId(),
     });
     if (result) {
       ctx.success(null, '点赞成功~');
@@ -83,15 +175,19 @@ export default class questions extends Controller {
   // 取消点赞题目
   public async cancelLikeQuestions() {
     const { ctx } = this;
-    const { id, creator, username } = ctx.request.body;
-    if (!id || !creator || !username) {
+    const { id } = ctx.request.body;
+    if (!id) {
       ctx.fail('请填写完整信息~');
+      return;
+    }
+    if (!(await ctx.service.questions.isApproved(id))) {
+      ctx.fail('该题目未通过审核，无法操作~');
       return;
     }
     const result = await ctx.service.questions.cancelLikeQuestions({
       id,
-      creator,
-      username,
+      // 从 session 取点赞用户 ID，不信任前端传入
+      userId: ctx.currentUserId(),
     });
     if (result) {
       ctx.success(null, '取消点赞成功~');
@@ -102,14 +198,17 @@ export default class questions extends Controller {
   // 浏览数
   public async addBrowsesNum() {
     const { ctx } = this;
-    const { id, username } = ctx.request.body;
+    const { id } = ctx.request.body;
     if (!id) {
       ctx.fail('请填写完整信息~');
       return;
     }
+    if (!(await ctx.service.questions.isApproved(id))) {
+      ctx.success(null, '');
+      return;
+    }
     const result = await ctx.service.questions.addBrowsesNum({
       id,
-      username,
     });
     if (result) {
       ctx.success(null, '');
@@ -138,6 +237,49 @@ export default class questions extends Controller {
       ctx.success(result, '请求成功');
     } else {
       ctx.fail('获取题目失败~');
+    }
+  }
+  // 标签统计（管理员）
+  public async getTagStats() {
+    const { ctx } = this;
+    const result = await ctx.service.questions.getTagStats();
+    if (result) {
+      ctx.success(result, '请求成功');
+    } else {
+      ctx.fail('获取标签失败~');
+    }
+  }
+  // 重命名标签（管理员）
+  public async renameTag() {
+    const { ctx } = this;
+    const { oldTag, newTag } = ctx.request.body;
+    const old = String(oldTag || '').trim();
+    const fresh = String(newTag || '').trim();
+    if (!old || !fresh) {
+      ctx.fail('请填写完整信息~');
+      return;
+    }
+    const result = await ctx.service.questions.renameTag(old, fresh);
+    if (result) {
+      ctx.success(null, `已更新 ${result.updated} 道题目`);
+    } else {
+      ctx.fail('重命名失败~');
+    }
+  }
+  // 删除标签（管理员）
+  public async deleteTag() {
+    const { ctx } = this;
+    const { tag } = ctx.request.body;
+    const t = String(tag || '').trim();
+    if (!t) {
+      ctx.fail('标签不能为空~');
+      return;
+    }
+    const result = await ctx.service.questions.deleteTag(t);
+    if (result) {
+      ctx.success(null, `已从 ${result.updated} 道题目移除`);
+    } else {
+      ctx.fail('删除失败~');
     }
   }
 }

@@ -5,7 +5,22 @@ export default class paper extends Service {
   public async getPaperQuestions(params) {
     const { app } = this;
     try {
-      const result = await app.mysql.insert('examination_paper', params);
+      const { ids, ...paperData } = params;
+      // 插入试卷（不再存逗号分隔的 ids）
+      const result: any = await app.mysql.insert('examination_paper', paperData);
+      const paperId = result.insertId;
+      // 插入试卷-题目关联
+      const idList = String(ids)
+        .split(',')
+        .map(x => x.trim())
+        .filter(x => x !== '');
+      for (let i = 0; i < idList.length; i++) {
+        await app.mysql.insert('paper_question', {
+          paper_id: paperId,
+          question_id: Number(idList[i]),
+          sort_order: i,
+        });
+      }
       return result;
     } catch (err) {
       return null;
@@ -17,9 +32,9 @@ export default class paper extends Service {
     const { author, type } = params;
     try {
       if (type === 'all') {
-        // 获取所有组卷
+        // 获取所有组卷（未删除）
         const result: any = await app.mysql.query(
-          'select * from examination_paper order by paper_id desc',
+          'select * from examination_paper where is_deleted = 0 order by paper_id desc',
         );
         const purviewPaper = result.filter((item: any) => item.purview === -1); // 官方的试卷
         const personPaper = result.filter(
@@ -33,7 +48,7 @@ export default class paper extends Service {
       }
       // 我的试卷
       const result: any = await app.mysql.query(
-        `select * from examination_paper where author = '${author}' order by paper_id desc`,
+        `select * from examination_paper where author = '${author}' and is_deleted = 0 order by paper_id desc`,
       );
 
       return result;
@@ -44,21 +59,25 @@ export default class paper extends Service {
   // 获取组卷详情
   public async getPaperQuestionsDetail(params) {
     const { app } = this;
-    const { paperId } = params;
+    const { paperId, forTest } = params;
 
     try {
       const result: any = await app.mysql.get('examination_paper', {
         paper_id: paperId,
+        is_deleted: 0,
       });
-      const ids = result.ids.split(',');
-      const questions: any = [];
-      for (let i = 0; i < ids.length; i++) {
-        const item = ids[i];
-        // 找到id对应的题目
-        const question = await app.mysql.query(
-          `select * from questions where id = (${item})`,
-        );
-        questions.push(question[0]);
+      // 通过关联表按顺序查题目
+      const questions: any = await app.mysql.query(
+        'SELECT q.* FROM paper_question pq ' +
+          'JOIN questions q ON pq.question_id = q.id ' +
+          'WHERE pq.paper_id = ? AND q.is_deleted = 0 ORDER BY pq.sort_order',
+        [ paperId ],
+      );
+      // 在线做题模式下不返回答案，防止提前泄露
+      if (forTest) {
+        questions.forEach((q: any) => {
+          delete q.answer;
+        });
       }
 
       return {
@@ -69,5 +88,24 @@ export default class paper extends Service {
       return null;
     }
   }
-
+  // 修改试卷公开/私密权限（仅作者本人可改）
+  public async updatePaperPurview(params) {
+    const { app } = this;
+    const { paperId, purview, chkState, owner } = params;
+    try {
+      const paper: any = await app.mysql.get('examination_paper', {
+        paper_id: paperId,
+      });
+      // 只能修改自己的试卷
+      if (!paper || paper.author !== owner) return null;
+      const result = await app.mysql.update(
+        'examination_paper',
+        { purview, chkState },
+        { where: { paper_id: paperId } },
+      );
+      return result;
+    } catch (err) {
+      return null;
+    }
+  }
 }

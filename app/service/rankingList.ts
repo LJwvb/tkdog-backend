@@ -1,26 +1,37 @@
 import { Service } from 'egg';
 
 export default class RankingList extends Service {
-  public async getRankingList() {
+  public async getRankingList(type = 'all') {
     const { app } = this;
     try {
-      const result:any = await app.mysql.select('ranking_list');
-      // 如果get_likes_num和upload_ques_num其中为0，就去除这一条数据
-      for (let i = 0; i < result.length; i++) {
-        if (result[i].get_likes_num === 0 && result[i].upload_ques_num === 0) {
-          result.splice(i, 1);
-          i--;
+      // 时间范围：week=近7天 / month=近30天 / all=全部
+      let since: string | undefined;
+      if (type === 'week' || type === 'month') {
+        const d = new Date();
+        d.setDate(d.getDate() - (type === 'week' ? 7 : 30));
+        since = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      }
+      // 实时聚合积分：上传×2 + 审核通过×5 + 答对×1 + 打卡×5
+      const users: any = await app.mysql.query(
+        'SELECT userId, username, avatar FROM user',
+      );
+      const list: any[] = [];
+      for (const u of users) {
+        const p: any = await this.service.user.computePoints(u.userId, since);
+        if (p.integral > 0 || p.upload > 0 || p.likes > 0) {
+          list.push({
+            username: u.username,
+            avatar: u.avatar,
+            upload_ques_num: p.upload,
+            get_likes_num: p.likes,
+            correct_ques_num: p.correct,
+            checkin_days: p.checkin,
+            integral: p.integral,
+          });
         }
       }
-      // 将排行榜按照点赞数量+上传题目数量排序
-      result.sort((a: any, b: any) => {
-        return (
-          b.get_likes_num +
-          b.upload_ques_num -
-          (a.get_likes_num + a.upload_ques_num)
-        );
-      });
-      return result;
+      list.sort((a, b) => b.integral - a.integral);
+      return list;
     } catch (err) {
       return null;
     }

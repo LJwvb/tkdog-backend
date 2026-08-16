@@ -1,5 +1,8 @@
 {
   "extends": "@eggjs/tsconfig",
+  "compilerOptions": {
+    "noEmit": true
+  },
   "exclude": [
     "app/public",
     "app/views",

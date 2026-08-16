@@ -1,4 +1,4 @@
-// 配置统一返回格式
+// 配置统一返回格式 + 鉴权辅助方法
 
 import { Context } from 'egg';
 
@@ -16,6 +16,45 @@ export default {
       message,
       success: false,
       code,
+    };
+  },
+  // 当前登录用户 ID（从 session 取，未登录返回 undefined）
+  currentUserId(this: Context): number | undefined {
+    return this.session?.userId;
+  },
+  // 当前登录用户名
+  currentUsername(this: Context): string | undefined {
+    return this.session?.username;
+  },
+  // 解析独立管理员 cookie（ADMIN_SESS）
+  parseAdminCookie(this: Context): { id?: number; name?: string } | null {
+    const raw = this.cookies.get('ADMIN_SESS', { signed: true });
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  },
+  // 当前管理员 ID（独立 ADMIN_SESS cookie，与普通用户 session 完全隔离）
+  currentAdminId(this: Context): number | undefined {
+    return this.parseAdminCookie()?.id;
+  },
+  // 当前管理员名
+  currentAdminName(this: Context): string | undefined {
+    return this.parseAdminCookie()?.name;
+  },
+  // 是否管理员（存在 ADMIN_SESS cookie 即视为管理员）
+  isAdmin(this: Context): boolean {
+    return Boolean(this.cookies.get('ADMIN_SESS', { signed: true }));
+  },
+  // 未登录/无权限统一响应
+  unauthorized(this: Context, message = '未登录或登录已过期') {
+    this.status = 401;
+    this.body = {
+      message,
+      success: false,
+      code: 401,
     };
   },
 };

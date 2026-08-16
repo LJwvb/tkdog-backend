@@ -1,6 +1,6 @@
 /* eslint-disable comma-dangle */
 import { Service } from 'egg';
-import { getNowFormatDate } from '../utils';
+import { getNowFormatDate, getSubjectName } from '../utils';
 
 interface IChkQuestions {
   id: number | string; // 题目ID
@@ -57,13 +57,152 @@ export default class admin extends Service {
       return null;
     }
   }
-  // 获取用户列表
-  public async getUserList() {
+  // 获取用户列表（分页）
+  public async getUserList(params) {
+    const { app } = this;
+    const { currentPage = 1, pageSize = 10 } = params || {};
+    try {
+      const user: any = await app.mysql.query(
+        'SELECT * FROM user WHERE is_deleted = 0',
+      );
+      const admin = await app.mysql.select('admin');
+      const list: any[] = [ ...admin, ...user ];
+      for (const item of list) {
+        const creator = item.username || item.name;
+        if (creator) {
+          const stats = await app.mysql.query(
+            'SELECT COUNT(*) AS upload_ques_num, ' +
+              'COALESCE(SUM(likes_num),0) AS like_ques_num, ' +
+              'COALESCE(SUM(CASE WHEN chkState=1 THEN 1 ELSE 0 END), 0) AS approvedNums ' +
+              'FROM questions WHERE creator = ? AND is_deleted = 0',
+            [ creator ],
+          );
+          item.upload_ques_num = stats[0].upload_ques_num;
+          item.like_ques_num = stats[0].like_ques_num;
+          item.approvedNums = stats[0].approvedNums;
+        }
+        // 普通用户积分用与用户端完全一致的 computePoints 实时计算（上传×2 + 审核通过×5 + 答对×1 + 打卡×5）
+        if (item.userId) {
+          const points = await this.service.user.computePoints(item.userId);
+          item.integral = points.integral;
+        } else {
+          // 管理员行无积分
+          item.integral = 0;
+        }
+        // 不向前端暴露密码
+        delete item.password;
+      }
+      const total = list.length;
+      const page = Number(currentPage) || 1;
+      const size = Number(pageSize) || 10;
+      const result = list.slice((page - 1) * size, page * size);
+      return { result, total };
+    } catch (err) {
+      return null;
+    }
+  }
+  // 首页统计：近七日新增趋势 + 总量 + 科目/题型分布
+  public async getStatistics() {
     const { app } = this;
     try {
-      const user = await app.mysql.select('user');
-      const admin = await app.mysql.select('admin');
-      return [ ...admin, ...user ];
+      // 生成近七日日期标签（YYYY-MM-DD）
+      const days: string[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        days.push(`${d.getFullYear()}-${mm}-${dd}`);
+      }
+      // 把「按天聚合」的查询结果映射到近七日数组
+      const mapCount = (rows: any): Array<{ date: string; value: number }> => {
+        const m: Record<string, number> = {};
+        (rows || []).forEach((r: any) => {
+          m[String(r.d).slice(0, 10)] = Number(r.c) || 0;
+        });
+        return days.map(d => ({ date: d, value: m[d] || 0 }));
+      };
+
+      const [ userRows, questionRows, paperRows, answerRows ] = await Promise.all([
+        app.mysql.query(
+          "SELECT DATE_FORMAT(ctime, '%Y-%m-%d') AS d, COUNT(*) AS c FROM user WHERE ctime IS NOT NULL AND is_deleted = 0 GROUP BY DATE_FORMAT(ctime, '%Y-%m-%d')",
+        ),
+        app.mysql.query(
+          "SELECT DATE_FORMAT(addDate, '%Y-%m-%d') AS d, COUNT(*) AS c FROM questions WHERE addDate IS NOT NULL AND is_deleted = 0 GROUP BY DATE_FORMAT(addDate, '%Y-%m-%d')",
+        ),
+        app.mysql.query(
+          "SELECT DATE_FORMAT(ctime, '%Y-%m-%d') AS d, COUNT(*) AS c FROM examination_paper WHERE is_deleted = 0 GROUP BY DATE_FORMAT(ctime, '%Y-%m-%d')",
+        ),
+        app.mysql.query(
+          "SELECT DATE_FORMAT(ctime, '%Y-%m-%d') AS d, COUNT(*) AS c FROM paper_record GROUP BY DATE_FORMAT(ctime, '%Y-%m-%d')",
+        ),
+      ]);
+
+      const one = async (sql: string): Promise<number> => {
+        const rows: any = await app.mysql.query(sql);
+        return Number(rows?.[0]?.c) || 0;
+      };
+      const totals = {
+        users: await one('SELECT COUNT(*) AS c FROM user WHERE is_deleted = 0'),
+        questions: await one(
+          'SELECT COUNT(*) AS c FROM questions WHERE is_deleted = 0',
+        ),
+        papers: await one(
+          'SELECT COUNT(*) AS c FROM examination_paper WHERE is_deleted = 0',
+        ),
+        answers: await one('SELECT COUNT(*) AS c FROM paper_record'),
+        comments: await one(
+          'SELECT COUNT(*) AS c FROM comment WHERE is_deleted = 0',
+        ),
+        pendingFeedback: await one(
+          'SELECT COUNT(*) AS c FROM question_feedback WHERE is_resolved = 0',
+        ),
+      };
+
+      const subjectRows: any = await app.mysql.query(
+        'SELECT subjectID, COUNT(*) AS c FROM questions WHERE is_deleted = 0 GROUP BY subjectID',
+      );
+      const subjectDist = subjectRows.map((r: any) => ({
+        name: getSubjectName(Number(r.subjectID)),
+        value: Number(r.c) || 0,
+      }));
+
+      const typeNameMap: Record<number, string> = {
+        0: '单选题',
+        1: '多选题',
+        2: '判断题',
+        3: '简答题',
+      };
+      const typeRows: any = await app.mysql.query(
+        'SELECT questionType, COUNT(*) AS c FROM questions WHERE is_deleted = 0 GROUP BY questionType',
+      );
+      const typeDist = typeRows.map((r: any) => ({
+        name: typeNameMap[Number(r.questionType)] || '其他',
+        value: Number(r.c) || 0,
+      }));
+
+      // 最近上传的题目 / 最近创建的试卷
+      const recentUploads: any = await app.mysql.query(
+        'SELECT id, question, creator, addDate FROM questions WHERE is_deleted = 0 ORDER BY id DESC LIMIT 5',
+      );
+      const recentPapers: any = await app.mysql.query(
+        'SELECT paper_id, paper_title, author, ctime FROM examination_paper WHERE is_deleted = 0 ORDER BY paper_id DESC LIMIT 5',
+      );
+
+      return {
+        days,
+        sevenDays: {
+          newUsers: mapCount(userRows),
+          uploads: mapCount(questionRows),
+          papers: mapCount(paperRows),
+          answers: mapCount(answerRows),
+        },
+        totals,
+        subjectDist,
+        typeDist,
+        recentUploads,
+        recentPapers,
+      };
     } catch (err) {
       return null;
     }
@@ -75,13 +214,13 @@ export default class admin extends Service {
 
     try {
       const result = await app.mysql.select('questions', {
-        where: { chkState: 0 },
+        where: { chkState: 0, is_deleted: 0 },
         limit: pageSize,
         offset: (currentPage - 1) * pageSize,
       });
       // 获取所有未审核题目总数
       const count = await app.mysql.query(
-        'select count(*) as count from questions where chkState = 0'
+        'select count(*) as count from questions where chkState = 0 and is_deleted = 0'
       );
       return { result, total: count[0].count };
     } catch (err) {
@@ -95,13 +234,13 @@ export default class admin extends Service {
 
     try {
       const result = await app.mysql.select('questions', {
-        where: { chkState: 1 },
+        where: { chkState: 1, is_deleted: 0 },
         limit: pageSize,
         offset: (currentPage - 1) * pageSize,
       });
       // 获取所有已审核题目总数
       const count = await app.mysql.query(
-        'select count(*) as count from questions where chkState = 1'
+        'select count(*) as count from questions where chkState = 1 and is_deleted = 0'
       );
       return { result, total: count[0].count };
     } catch (err) {
@@ -111,30 +250,32 @@ export default class admin extends Service {
   // 审核题目
   public async chkQuestions(params: IChkQuestions) {
     const { app } = this;
-    const { chkState, creator } = params;
     try {
       const result = await app.mysql.update('questions', params, {
         where: { id: params.id },
       });
-      // 审核通过则更新排行榜上传题目数量和用户上传题目数量
-      if (chkState === 1) {
-        const rankList: any = await app.mysql.get('ranking_list', {
-          username: creator,
+      // 统计字段（获赞/上传/审核通过数）已改为实时计算，无需在此维护冗余字段
+      // 审核结果通知上传者
+      const question: any = await app.mysql.get('questions', { id: params.id });
+      if (question) {
+        const upload: any = await app.mysql.get('user_upload_question', {
+          question_id: params.id,
         });
-        const user: any = await app.mysql.get('user', { username: creator });
-        if (rankList) {
-          await app.mysql.update(
-            'ranking_list',
-            { upload_ques_num: rankList.upload_ques_num + 1 },
-            { where: { username: creator } }
-          );
-        }
-        if (user) {
-          await app.mysql.update(
-            'user',
-            { approvedNums: user.approvedNums + 1 },
-            { where: { username: creator } }
-          );
+        if (upload?.user_id) {
+          const stateText =
+            Number(params.chkState) === 1
+              ? '审核通过'
+              : Number(params.chkState) === 2
+                ? '审核不通过'
+                : '待审核';
+          await this.service.notification.create({
+            userId: upload.user_id,
+            type: 'question_review',
+            title: `题目${stateText}`,
+            content: `你上传的题目「${question.question || ''}」${stateText}${
+              params.chkRemarks ? '，备注：' + params.chkRemarks : ''
+            }`,
+          });
         }
       }
       return result;
@@ -142,12 +283,18 @@ export default class admin extends Service {
       return null;
     }
   }
-  // 删除题目
+  // 删除题目（软删除：标记 is_deleted，题目及其评论一并标记，不物理删除）
   public async deleteQuestions(params) {
     const { app } = this;
+    const { id } = params;
     try {
-      const result = await app.mysql.delete('questions', params);
-      return result;
+      await app.mysql.update('questions', { is_deleted: 1 }, { where: { id } });
+      await app.mysql.update(
+        'comment',
+        { is_deleted: 1 },
+        { where: { question_id: id } },
+      );
+      return { success: true };
     } catch (err) {
       return null;
     }
@@ -168,6 +315,24 @@ export default class admin extends Service {
           },
         }
       );
+      // 审核结果通知试卷作者
+      const paper: any = await app.mysql.get('examination_paper', {
+        paper_id: paperId,
+      });
+      if (paper?.author) {
+        const author: any = await app.mysql.get('user', {
+          username: paper.author,
+        });
+        if (author?.userId) {
+          const stateText = Number(chkState) === 1 ? '审核通过' : '审核不通过';
+          await this.service.notification.create({
+            userId: author.userId,
+            type: 'paper_review',
+            title: `试卷${stateText}`,
+            content: `你创建的试卷「${paper.paper_title || ''}」${stateText}`,
+          });
+        }
+      }
       return result;
     } catch (err) {
       return null;
@@ -211,27 +376,120 @@ export default class admin extends Service {
       return null;
     }
   }
-  // 删除试卷
+  // 删除试卷（软删除：标记 is_deleted，不物理删除）
   public async deletePaper(params) {
     const { app } = this;
     const { paperId } = params;
     try {
-      const result = await app.mysql.delete('examination_paper', {
-        paper_id: paperId,
-      });
+      const result = await app.mysql.update(
+        'examination_paper',
+        { is_deleted: 1 },
+        { where: { paper_id: paperId } },
+      );
       return result;
     } catch (err) {
       return null;
     }
   }
-  // 删除用户
+  // 删除用户（软删除：标记 is_deleted，不物理删除）
   public async deleteUser(params) {
     const { app } = this;
     const { userId } = params;
     try {
-      const result = await app.mysql.delete('user', {
-        userId,
+      const result = await app.mysql.update(
+        'user',
+        { is_deleted: 1 },
+        { where: { userId } },
+      );
+      return result;
+    } catch (err) {
+      return null;
+    }
+  }
+  // ===== 已删除数据列表 + 恢复 =====
+  // 恢复题目
+  public async restoreQuestion(id: number) {
+    const { app } = this;
+    try {
+      const result = await app.mysql.update(
+        'questions',
+        { is_deleted: 0 },
+        { where: { id } },
+      );
+      return result;
+    } catch (err) {
+      return null;
+    }
+  }
+  // 已删除题目列表
+  public async getDeletedQuestions(params) {
+    const { app } = this;
+    const { currentPage = 1, pageSize = 10 } = params || {};
+    try {
+      const result = await app.mysql.select('questions', {
+        where: { is_deleted: 1 },
+        limit: pageSize,
+        offset: (currentPage - 1) * pageSize,
       });
+      const count = await app.mysql.count('questions', { is_deleted: 1 });
+      return { result, total: count };
+    } catch (err) {
+      return null;
+    }
+  }
+  // 恢复试卷
+  public async restorePaper(paperId: number) {
+    const { app } = this;
+    try {
+      const result = await app.mysql.update(
+        'examination_paper',
+        { is_deleted: 0 },
+        { where: { paper_id: paperId } },
+      );
+      return result;
+    } catch (err) {
+      return null;
+    }
+  }
+  // 已删除试卷列表
+  public async getDeletedPapers(params) {
+    const { app } = this;
+    const { currentPage = 1, pageSize = 10 } = params || {};
+    try {
+      const result = await app.mysql.select('examination_paper', {
+        where: { is_deleted: 1 },
+        limit: pageSize,
+        offset: (currentPage - 1) * pageSize,
+      });
+      const count = await app.mysql.count('examination_paper', {
+        is_deleted: 1,
+      });
+      return { result, total: count };
+    } catch (err) {
+      return null;
+    }
+  }
+  // 恢复用户
+  public async restoreUser(userId: number) {
+    const { app } = this;
+    try {
+      const result = await app.mysql.update(
+        'user',
+        { is_deleted: 0 },
+        { where: { userId } },
+      );
+      return result;
+    } catch (err) {
+      return null;
+    }
+  }
+  // 已删除用户列表
+  public async getDeletedUsers() {
+    const { app } = this;
+    try {
+      const result = await app.mysql.query(
+        'SELECT * FROM user WHERE is_deleted = 1',
+      );
       return result;
     } catch (err) {
       return null;

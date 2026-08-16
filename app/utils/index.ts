@@ -1,29 +1,20 @@
-// 获取当前具体时间
+// 获取当前具体时间（YYYY-MM-DD HH:mm:ss）
 function getNowFormatDate() {
   const date = new Date();
-  const separator1 = '-';
-  const separator2 = ':';
-  let month = date.getMonth() + 1;
-  let strDate = date.getDate();
-  if (month >= 1 && month <= 9) {
-    month = Number(`0${month}`);
-  }
-  if (strDate >= 0 && strDate <= 9) {
-    strDate = Number(`0${strDate}`);
-  }
-  const currentDate =
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return (
     date.getFullYear() +
-    separator1 +
-    month +
-    separator2 +
-    strDate +
+    '-' +
+    pad(date.getMonth() + 1) +
+    '-' +
+    pad(date.getDate()) +
     ' ' +
-    date.getHours() +
-    separator1 +
-    date.getMinutes() +
-    separator2 +
-    date.getSeconds();
-  return currentDate;
+    pad(date.getHours()) +
+    ':' +
+    pad(date.getMinutes()) +
+    ':' +
+    pad(date.getSeconds())
+  );
 }
 
 // 去除密码和电话号码
@@ -164,4 +155,10 @@ const transFromName = (chkState: number) => {
   }
 };
 
-export { getNowFormatDate, removePassword, getSubjectName, getCatalogName, transFromName };
+export {
+  getNowFormatDate,
+  removePassword,
+  getSubjectName,
+  getCatalogName,
+  transFromName,
+};

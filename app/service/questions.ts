@@ -1,6 +1,30 @@
 import { Service } from 'egg';
-import { compareTwoStrings } from 'string-similarity';
-import { getSubjectName, getCatalogName } from '../utils';
+import { getSubjectName, getCatalogName, getNowFormatDate } from '../utils';
+
+// 批量导入：规范化客观题答案字母（A,C -> AC，去分隔符、转大写）
+function importNormalizeAnswer(ans: unknown): string {
+  if (ans == null) return '';
+  if (Array.isArray(ans)) {
+    return ans
+      .map(x => String(x).trim())
+      .filter(Boolean)
+      .join('')
+      .toUpperCase()
+      .replace(/[\s,，、;；]/g, '');
+  }
+  return String(ans)
+    .trim()
+    .toUpperCase()
+    .replace(/[\s,，、;；]/g, '');
+}
+
+// 批量导入：判断题答案语义归一
+function importJudgement(ans: unknown): string {
+  const t = String(ans ?? '').trim().toLowerCase();
+  if (/^(对|正确|√|✓|✔|是|真|true|t|yes|y|1|right|r|ok)$/.test(t)) return '正确';
+  if (/^(错|错误|×|✗|✘|否|假|false|f|no|n|0|wrong|w)$/.test(t)) return '错误';
+  return String(ans ?? '').trim();
+}
 
 interface IQuestion {
   type?: 'all'; // all:全部
@@ -32,6 +56,7 @@ interface IUploadQuestions {
   chkRemarks?: string; // 审核备注
   chkDate?: string; // 审核时间
   creator: string; // 创建人
+  userId?: number; // 上传者 userId（用于关联表）
 }
 
 export default class questions extends Service {
@@ -60,29 +85,19 @@ export default class questions extends Service {
         const result = await app.mysql.select('questions', {
           where: {
             subjectID: subjectIDParams,
+            is_deleted: 0,
           },
           limit: pageSize,
           offset: (currentPage - 1) * pageSize,
         });
         const total = await app.mysql.count('questions', {
           subjectID: subjectIDParams,
+          is_deleted: 0,
         });
-        result.forEach((item: any) => {
-          if (item?.browses_num > 10 && item?.catalogID === 0) {
-            item.catalogID = 1;
-            app.mysql.update(
-              'questions',
-              {
-                catalogID: 1,
-              },
-              {
-                where: {
-                  id: item.id,
-                },
-              },
-            );
-          }
-        });
+        // 一次性提升热门题（浏览数超阈值），避免逐条 UPDATE
+        await app.mysql.query(
+          'UPDATE questions SET catalogID = 1 WHERE browses_num > 10 AND catalogID = 0 AND is_deleted = 0',
+        );
 
         return {
           result,
@@ -92,9 +107,8 @@ export default class questions extends Service {
 
       if (type === 'home') {
         const result: any = await app.mysql.query(
-          `select * from questions where catalogID = ${catalogIDParams} and subjectID = ${subjectIDParams} and chkState = 1 limit ${pageSize} offset ${
-            (currentPage - 1) * pageSize
-          }`,
+          'select * from questions where catalogID = ? and subjectID = ? and chkState = 1 and is_deleted = 0 order by rand() limit ? offset ?',
+          [ catalogIDParams, subjectIDParams, pageSize, (currentPage - 1) * pageSize ],
         );
         result.forEach((item: any) => {
           item.tags = item?.tags?.split(',');
@@ -104,6 +118,7 @@ export default class questions extends Service {
         const chkStateQuestion: any = await app.mysql.select('questions', {
           where: {
             chkState: 1,
+            is_deleted: 0,
           },
         });
         chkStateQuestion.forEach((item: any) => {
@@ -112,20 +127,6 @@ export default class questions extends Service {
           }
           if (catalogIdList.indexOf(item.catalogID) === -1) {
             catalogIdList.push(item.catalogID);
-          }
-          if (item?.browses_num > 10 && item?.catalogID === 0) {
-            item.catalogID = 1;
-            app.mysql.update(
-              'questions',
-              {
-                catalogID: 1,
-              },
-              {
-                where: {
-                  id: item.id,
-                },
-              },
-            );
           }
         });
         subjectIdList
@@ -152,14 +153,20 @@ export default class questions extends Service {
         };
       }
       if (type === 'user') {
-        const questionIds: any = ids && ids.split(',');
+        const questionIds: any =
+          ids && ids.split(',').filter((x: string) => x !== '');
+        // 空 ids 直接返回空结果，避免 `in ()` SQL 语法错误
+        if (!questionIds || questionIds.length === 0) {
+          return { result: [], total: 0 };
+        }
         const result: any = await app.mysql.query(
-          `select * from questions where id in (${questionIds}) and chkState = 1 limit ${pageSize} offset ${
+          `select * from questions where id in (${questionIds}) and chkState = 1 and is_deleted = 0 limit ${pageSize} offset ${
             (currentPage - 1) * pageSize
           }`,
         );
         const total = await app.mysql.count('questions', {
           id: questionIds,
+          is_deleted: 0,
         });
         result.forEach((item: any) => {
           item.tags = item?.tags?.split(',');
@@ -179,17 +186,22 @@ export default class questions extends Service {
     const { app } = this;
     const { id } = params;
     try {
-      const result = await app.mysql.get('questions', { id });
+      const result = await app.mysql.get('questions', { id, is_deleted: 0 });
       return result;
     } catch (err) {
       return null;
     }
   }
+  // 题目是否审核通过（未审核/不通过均返回 false，用于拦截点赞/评论/浏览等操作）
+  public async isApproved(id): Promise<boolean> {
+    const question: any = await this.getQuestionDetail({ id });
+    return Boolean(question && Number(question.chkState) === 1);
+  }
 
   // 点赞题目
   public async likeQuestions(params) {
     const { app } = this;
-    const { id, creator, username } = params;
+    const { id, userId } = params;
     try {
       // 获取当前题目的点赞数量
       const questions: any = await app.mysql.get('questions', { id });
@@ -198,32 +210,11 @@ export default class questions extends Service {
         { likes_num: questions.likes_num + 1 },
         { where: { id } },
       );
-      // 更新排行榜点赞数量
-      const rankList: any = await app.mysql.get('ranking_list', {
-        username: creator,
+      // 记录点赞关系（关联表，直接使用 userId）
+      await app.mysql.insert('user_like_question', {
+        user_id: userId,
+        question_id: id,
       });
-      // 获取之前点赞的题目id
-      const user: any = await app.mysql.get('user', { username });
-      if (user) {
-        const likeTopicsId = user?.likeTopicsId?.split(',');
-        likeTopicsId.push(id);
-        const idStr = likeTopicsId.join(',');
-        await app.mysql.update(
-          'user',
-          { likeTopicsId: idStr },
-          { where: { username } },
-        );
-        await app.mysql.update(
-          'user',
-          { like_ques_num: user.like_ques_num + 1 },
-          { where: { username: creator } },
-        );
-        await app.mysql.update(
-          'ranking_list',
-          { get_likes_num: rankList.get_likes_num + 1 },
-          { where: { username: creator } },
-        );
-      }
 
       return result;
     } catch (err) {
@@ -233,7 +224,7 @@ export default class questions extends Service {
   // 取消点赞题目
   public async cancelLikeQuestions(params) {
     const { app } = this;
-    const { id, creator, username } = params;
+    const { id, userId } = params;
     try {
       // 获取当前题目的点赞数量
       const questions: any = await app.mysql.get('questions', { id });
@@ -242,32 +233,11 @@ export default class questions extends Service {
         { likes_num: questions.likes_num - 1 },
         { where: { id } },
       );
-      // 更新用户点赞的题目id
-      const user: any = await app.mysql.get('user', { username });
-      const likeTopicsId = user?.likeTopicsId?.split(',');
-      const index = likeTopicsId.indexOf(id);
-      likeTopicsId.splice(index, 1);
-      const idStr = likeTopicsId.join(',');
-      await app.mysql.update(
-        'user',
-        { likeTopicsId: idStr },
-        { where: { username } },
-      );
-      await app.mysql.update(
-        'user',
-        { like_ques_num: user.like_ques_num - 1 },
-        { where: { username: creator } },
-      );
-
-      // 更新排行榜点赞数量
-      const rankList: any = await app.mysql.get('ranking_list', {
-        username: creator,
+      // 删除点赞关系（关联表，直接使用 userId）
+      await app.mysql.delete('user_like_question', {
+        user_id: userId,
+        question_id: id,
       });
-      await app.mysql.update(
-        'ranking_list',
-        { get_likes_num: rankList.get_likes_num - 1 },
-        { where: { username: creator } },
-      );
 
       return result;
     } catch (err) {
@@ -294,25 +264,150 @@ export default class questions extends Service {
   // 上传题目
   public async uploadQuestions(params: IUploadQuestions) {
     const { app } = this;
-    const { creator } = params;
     try {
-      // 获取用户上传的题目数量
-      const user: any = await app.mysql.get('user', {
-        username: creator,
+      const { userId, ...questionData } = params;
+      const result: any = await app.mysql.insert('questions', questionData);
+      // 记录上传关系（关联表，直接使用 userId）
+      await app.mysql.insert('user_upload_question', {
+        user_id: userId,
+        question_id: result.insertId,
       });
-      await app.mysql.update(
-        'user',
-        { upload_ques_num: user.upload_ques_num + 1 },
-        { where: { username: creator } },
-      );
-      await app.mysql.update(
-        'ranking_list',
-        { upload_ques_num: user.upload_ques_num + 1 },
-        { where: { username: creator } },
-      );
-
-      const result = await app.mysql.insert('questions', params);
       return result;
+    } catch (err) {
+      return null;
+    }
+  }
+  // 编辑题目（管理员，用于按用户纠错反馈修正题目）
+  public async updateQuestion(params) {
+    const { app } = this;
+    const { id, ...updateData } = params;
+    try {
+      const result = await app.mysql.update('questions', updateData, {
+        where: { id },
+      });
+      return result;
+    } catch (err) {
+      return null;
+    }
+  }
+  // 批量导入题目
+  public async importQuestions(params) {
+    const { app } = this;
+    const { userId, creator, isAdmin, questions } = params;
+    try {
+      if (!Array.isArray(questions) || questions.length === 0) {
+        return { imported: 0 };
+      }
+      let imported = 0;
+      for (const raw of questions) {
+        const q: any = this.normalizeImportItem(raw);
+        if (!q) continue;
+        const insertData = {
+          subjectID: q.subjectID,
+          questionType: q.questionType,
+          difficulty: q.difficulty,
+          question: q.question,
+          answer: q.answer,
+          questionDetail: q.questionDetail,
+          tags: q.tags,
+          direction: '',
+          creator,
+          addDate: getNowFormatDate(),
+          chkState: isAdmin ? 1 : 0,
+          isChoice: 0,
+          publishState: isAdmin ? 1 : 0,
+          catalogID: 0,
+          browses_num: 0,
+          likes_num: 0,
+        };
+        const result: any = await app.mysql.insert('questions', insertData);
+        if (userId) {
+          await app.mysql.insert('user_upload_question', {
+            user_id: userId,
+            question_id: result.insertId,
+          });
+        }
+        imported++;
+      }
+      return { imported };
+    } catch (err) {
+      return null;
+    }
+  }
+  // 规范化单条导入数据，非法项返回 null
+  private normalizeImportItem(raw: any): any | null {
+    if (!raw || !raw.question || raw.questionType == null || raw.answer == null) {
+      return null;
+    }
+    const qt = Number(raw.questionType);
+    const difficultyNum = Number(raw.difficulty);
+    const subjectID = Number(raw.subjectID);
+    if (![ 0, 1, 2, 3 ].includes(qt)) return null;
+
+    let answer = '';
+    let questionDetail = '';
+    if (qt === 0 || qt === 1) {
+      const ans = importNormalizeAnswer(raw.answer);
+      if (!ans) return null;
+      const opts = (Array.isArray(raw.options) ? raw.options : []).map(o => ({
+        code: String(o?.code ?? '').trim(),
+        value: String(o?.value ?? '').trim(),
+      }));
+      answer = `正确选项：${ans}`;
+      questionDetail = JSON.stringify(opts);
+    } else if (qt === 2) {
+      answer = importJudgement(raw.answer);
+      questionDetail = JSON.stringify([
+        { code: '正确', value: '' },
+        { code: '错误', value: '' },
+      ]);
+    } else {
+      answer = String(raw.answer).trim();
+      questionDetail = raw.questionDetail ? String(raw.questionDetail) : '';
+    }
+
+    return {
+      subjectID: Number.isNaN(subjectID) ? 12 : subjectID,
+      questionType: qt,
+      difficulty: Number.isNaN(difficultyNum) ? 0 : difficultyNum,
+      question: String(raw.question).trim(),
+      answer,
+      questionDetail,
+      tags: raw.tags ? String(raw.tags) : '',
+    };
+  }
+  // 智能组卷：按科目/难度/题型随机抽取已审核题目
+  public async randomPickQuestions(params) {
+    const { app } = this;
+    const { subjectID, difficulty, counts } = params || {};
+    try {
+      const spec: Record<number, number> = {
+        0: Number(counts?.single) || 0,
+        1: Number(counts?.multiple) || 0,
+        2: Number(counts?.judge) || 0,
+        3: Number(counts?.essay) || 0,
+      };
+      const picked: any[] = [];
+      for (const qt of [ 0, 1, 2, 3 ]) {
+        const n = spec[qt];
+        if (!n || n <= 0) continue;
+        const where: string[] = [ 'chkState = 1', 'is_deleted = 0', 'questionType = ?' ];
+        const values: any[] = [ String(qt) ];
+        if (subjectID !== undefined && subjectID !== null && subjectID !== '') {
+          where.push('subjectID = ?');
+          values.push(subjectID);
+        }
+        if (difficulty !== undefined && difficulty !== null && difficulty !== '') {
+          where.push('difficulty = ?');
+          values.push(difficulty);
+        }
+        const rows: any = await app.mysql.query(
+          `select * from questions where ${where.join(' and ')} order by rand() limit ${Number(n)}`,
+          values,
+        );
+        picked.push(...rows);
+      }
+      return picked;
     } catch (err) {
       return null;
     }
@@ -323,7 +418,7 @@ export default class questions extends Service {
     const { app } = this;
     try {
       const result = await app.mysql.query(
-        'select * from questions where chkState = 1 order by rand() limit 1',
+        'select * from questions where chkState = 1 and is_deleted = 0 order by rand() limit 1',
       );
       return result;
     } catch (err) {
@@ -331,165 +426,238 @@ export default class questions extends Service {
     }
   }
 
-  // 相似题目
+  // 相似题目（基于结构化信息 + 关键词的综合评分）
   public async getSimilarQuestions(params) {
     const { app } = this;
     const { id } = params;
     try {
-      const result: any = await app.mysql.query(
-        'select * from questions where chkState = 1',
-      );
-      const question = result.find((item: any) => item.id === id)?.question;
-      const questions = result.map((item: any) => {
-        return {
-          id: item.id,
-          subjectID: item.subjectID,
-          catalogID: item.catalogID,
-          question: item.question,
-          difficulty: item.difficulty,
-          questionType: item.questionType,
-        };
+      const questionId = Number(id);
+      // 当前题目
+      const current: any = await app.mysql.get('questions', {
+        id: questionId,
       });
+      if (!current) return [];
 
-      const similarQuestions: any = [];
-      for (let i = 0; i < questions.length; i++) {
-        const item = questions[i];
-        const similar = await compareTwoStrings(question, item?.question);
-        if (similar === 1) {
-          continue;
-        }
-        if (similar > 0.1) {
-          similarQuestions.push(item);
+      // 所有已审核题目
+      const all: any = await app.mysql.query(
+        'select * from questions where chkState = 1 and is_deleted = 0',
+      );
+
+      // 当前题目的标签集合 + 技术关键词集合
+      const currentTags = new Set(
+        String(current.tags || '')
+          .split(',')
+          .map((t: string) => t.trim())
+          .filter(Boolean),
+      );
+      const currentKeywords = this.extractKeywords(current.question);
+
+      const scored: any = [];
+      for (const item of all) {
+        if (item.id === questionId) continue; // 跳过自己
+
+        let score = 0;
+        // 同科目：权重最高
+        if (item.subjectID === current.subjectID) score += 3;
+        // 同题型
+        if (item.questionType === current.questionType) score += 2;
+        // 同难度
+        if (item.difficulty === current.difficulty) score += 1;
+        // 标签交集
+        const itemTags = new Set(
+          String(item.tags || '')
+            .split(',')
+            .map((t: string) => t.trim())
+            .filter(Boolean),
+        );
+        let tagOverlap = 0;
+        currentTags.forEach(t => {
+          if (itemTags.has(t)) tagOverlap++;
+        });
+        score += tagOverlap * 2;
+        // 题干技术关键词重叠
+        const itemKeywords = this.extractKeywords(item.question);
+        let kwOverlap = 0;
+        currentKeywords.forEach(k => {
+          if (itemKeywords.includes(k)) kwOverlap++;
+        });
+        score += kwOverlap;
+
+        if (score > 0) {
+          scored.push({ item, score });
         }
       }
 
-      // 如果有多条，随机打乱返回两条
-      if (similarQuestions.length > 2) {
-        similarQuestions.sort(() => Math.random() - 0.5);
-        return similarQuestions.slice(0, 2);
-      }
-      return similarQuestions;
+      // 按得分降序，取前 5 条
+      scored.sort((a: any, b: any) => b.score - a.score);
+      return scored.slice(0, 5).map((s: any) => ({
+        id: s.item.id,
+        subjectID: s.item.subjectID,
+        catalogID: s.item.catalogID,
+        question: s.item.question,
+        difficulty: s.item.difficulty,
+        questionType: s.item.questionType,
+      }));
     } catch (err) {
       return null;
     }
   }
-  // 搜索题目
+
+  // 提取题干中的技术关键词（英文/数字词，过滤常见无意义词）
+  private extractKeywords(text: string): string[] {
+    if (!text) return [];
+    const stopWords = new Set([
+      'the', 'a', 'an', 'of', 'to', 'in', 'and', 'or', 'is', 'are',
+      'on', 'at', 'for', 'with', 'as', 'by', 'this', 'that',
+    ]);
+    const matches = text.match(/[a-zA-Z][a-zA-Z0-9.+#-]*/g) || [];
+    const keywords = matches
+      .map((w: string) => w.toLowerCase())
+      .filter((w: string) => w.length >= 2 && !stopWords.has(w));
+    return [ ...new Set(keywords) ];
+  }
+  // 搜索题目（参数化查询，避免 SQL 注入）
   public async searchQuestions(params) {
     const { app } = this;
     const {
       keyword,
       questionType,
       difficulty,
+      subjectID,
+      tags,
       currentPage,
       pageSize = 10,
     } = params;
     try {
-      // 只有关键字
-      if (keyword && !questionType && !difficulty) {
-        // 过滤掉未审核的题目
-        const result = await app.mysql.query(
-          `select * from questions where question like '%${keyword}%' and chkState = 1 limit ${pageSize} offset ${
-            (currentPage - 1) * pageSize
-          }`,
-        );
-        const total = await app.mysql.query(
-          `select count(*) from questions where question like '%${keyword}%' and chkState = 1`,
-        );
-        return {
-          result,
-          total: total[0]['count(*)'],
-        };
+      const hasKeyword =
+        keyword !== undefined && keyword !== null && String(keyword).trim() !== '';
+      const hasType =
+        questionType !== undefined && questionType !== null && questionType !== '';
+      const hasDifficulty =
+        difficulty !== undefined && difficulty !== null && difficulty !== '';
+      const hasSubject =
+        subjectID !== undefined && subjectID !== null && subjectID !== '';
+      const hasTags =
+        tags !== undefined && tags !== null && String(tags).trim() !== '';
+
+      const where: string[] = [ 'chkState = 1', 'is_deleted = 0' ];
+      const values: any[] = [];
+      if (hasKeyword) {
+        where.push('question like ?');
+        values.push(`%${String(keyword).trim()}%`);
       }
-      // 只有题型
-      if (!keyword && questionType && !difficulty) {
-        const result = await app.mysql.query(
-          `select * from questions where questionType = '${questionType}' and chkState = 1 limit ${pageSize} offset ${
-            (currentPage - 1) * pageSize
-          }`,
-        );
-        const total = await app.mysql.query(
-          `select count(*) from questions where questionType = '${questionType}' and chkState = 1`,
-        );
-        return {
-          result,
-          total: total[0]['count(*)'],
-        };
+      if (hasType) {
+        where.push('questionType = ?');
+        values.push(questionType);
       }
-      // 只有难度
-      if (!keyword && !questionType && difficulty) {
-        const result = await app.mysql.query(
-          `select * from questions where difficulty = '${difficulty}' and chkState = 1 limit ${pageSize} offset ${
-            (currentPage - 1) * pageSize
-          }`,
-        );
-        const total = await app.mysql.query(
-          `select count(*) from questions where difficulty = '${difficulty}' and chkState = 1`,
-        );
-        return {
-          result,
-          total: total[0]['count(*)'],
-        };
+      if (hasDifficulty) {
+        where.push('difficulty = ?');
+        values.push(difficulty);
       }
-      // 题型和难度
-      if (!keyword && questionType && difficulty) {
-        const result = await app.mysql.query(
-          `select * from questions where questionType = '${questionType}' and difficulty = '${difficulty}' and chkState = 1 limit ${pageSize} offset ${
-            (currentPage - 1) * pageSize
-          }`,
-        );
-        const total = await app.mysql.query(
-          `select count(*) from questions where questionType = '${questionType}' and difficulty = '${difficulty}' and chkState = 1`,
-        );
-        return {
-          result,
-          total: total[0]['count(*)'],
-        };
+      if (hasSubject) {
+        where.push('subjectID = ?');
+        values.push(Number(subjectID));
       }
-      // 关键字和题型
-      if (keyword && questionType && !difficulty) {
-        const result = await app.mysql.query(
-          `select * from questions where question like '%${keyword}%' and questionType = '${questionType}' and chkState = 1 limit ${pageSize} offset ${
-            (currentPage - 1) * pageSize
-          }`,
-        );
-        const total = await app.mysql.query(
-          `select count(*) from questions where question like '%${keyword}%' and questionType = '${questionType}' and chkState = 1`,
-        );
-        return {
-          result,
-          total: total[0]['count(*)'],
-        };
+      if (hasTags) {
+        where.push('tags like ?');
+        values.push(`%${String(tags).trim()}%`);
       }
-      // 关键字和难度
-      if (keyword && !questionType && difficulty) {
-        const result = await app.mysql.query(
-          `select * from questions where question like '%${keyword}%' and difficulty = '${difficulty}' and chkState = 1 limit ${pageSize} offset ${
-            (currentPage - 1) * pageSize
-          }`,
-        );
-        const total = await app.mysql.query(
-          `select count(*) from questions where question like '%${keyword}%' and difficulty = '${difficulty}' and chkState = 1`,
-        );
-        return {
-          result,
-          total: total[0]['count(*)'],
-        };
+      const whereSql = where.join(' and ');
+      const page = Number(pageSize) || 10;
+      const offset = (Number(currentPage) - 1) * page;
+
+      const result = await app.mysql.query(
+        `select * from questions where ${whereSql} limit ${page} offset ${offset}`,
+        values,
+      );
+      const totalRows = await app.mysql.query(
+        `select count(*) as count from questions where ${whereSql}`,
+        values,
+      );
+      return {
+        result,
+        total: totalRows[0].count,
+      };
+    } catch (err) {
+      return null;
+    }
+  }
+  // 标签统计（从题目逗号分隔 tags 字段聚合）
+  public async getTagStats() {
+    const { app } = this;
+    try {
+      const rows: any = await app.mysql.query(
+        "SELECT tags FROM questions WHERE tags IS NOT NULL AND tags != '' AND is_deleted = 0",
+      );
+      const map = new Map<string, number>();
+      rows.forEach((r: any) => {
+        String(r.tags)
+          .split(',')
+          .map((t: string) => t.trim())
+          .filter(Boolean)
+          .forEach((t: string) => {
+            map.set(t, (map.get(t) || 0) + 1);
+          });
+      });
+      return Array.from(map.entries())
+        .map(([ tag, count ]) => ({ tag, count }))
+        .sort((a, b) => b.count - a.count);
+    } catch (err) {
+      return null;
+    }
+  }
+  // 重命名标签：把某标签在所有题目里替换为新标签
+  public async renameTag(oldTag: string, newTag: string) {
+    const { app } = this;
+    try {
+      const rows: any = await app.mysql.query(
+        'SELECT id, tags FROM questions WHERE is_deleted = 0',
+      );
+      let updated = 0;
+      for (const r of rows) {
+        const tags = String(r.tags || '')
+          .split(',')
+          .map((t: string) => t.trim())
+          .filter(Boolean);
+        if (tags.includes(oldTag)) {
+          const newTags = tags.map(t => (t === oldTag ? newTag : t)).join(',');
+          await app.mysql.update(
+            'questions',
+            { tags: newTags },
+            { where: { id: r.id } },
+          );
+          updated++;
+        }
       }
-      // 题型和难度和关键字
-      if (keyword && questionType && difficulty) {
-        const result = await app.mysql.query(
-          `select * from questions where question like '%${keyword}%' and questionType = '${questionType}' and difficulty = '${difficulty}' and chkState = 1 limit ${pageSize} offset ${
-            (currentPage - 1) * pageSize
-          }`,
-        );
-        const total = await app.mysql.query(
-          `select count(*) from questions where question like '%${keyword}%' and questionType = '${questionType}' and difficulty = '${difficulty}' and chkState = 1 `,
-        );
-        return {
-          result,
-          total: total[0]['count(*)'],
-        };
+      return { updated };
+    } catch (err) {
+      return null;
+    }
+  }
+  // 删除标签：从所有题目中移除该标签
+  public async deleteTag(tag: string) {
+    const { app } = this;
+    try {
+      const rows: any = await app.mysql.query(
+        'SELECT id, tags FROM questions WHERE is_deleted = 0',
+      );
+      let updated = 0;
+      for (const r of rows) {
+        const tags = String(r.tags || '')
+          .split(',')
+          .map((t: string) => t.trim())
+          .filter(Boolean);
+        if (tags.includes(tag)) {
+          const newTags = tags.filter((t: string) => t !== tag).join(',');
+          await app.mysql.update(
+            'questions',
+            { tags: newTags },
+            { where: { id: r.id } },
+          );
+          updated++;
+        }
       }
+      return { updated };
     } catch (err) {
       return null;
     }

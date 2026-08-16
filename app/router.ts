@@ -2,92 +2,219 @@
 import { Application } from 'egg';
 
 export default (app: Application) => {
-  const { controller, router } = app;
+  const { controller, router, middleware } = app;
+  // 鉴权中间件
+  const auth = middleware.auth();
+  const adminAuth = middleware.adminAuth();
   // 前缀
   router.prefix('/api');
 
-  // todo user
-  // 验证码
+  // ===== 公开接口（登录 / 注册 / 浏览类，无需登录）=====
   router.post('/captcha', controller.user.captcha);
-  // 注册
   router.post('/register', controller.user.register);
-  // 登录
   router.post('/login', controller.user.login);
-  // 编辑用户信息
-  router.post('/editUserInfo', controller.user.updateUserInfo);
-  // 获取用户信息
-  router.post('/getUserInfo', controller.user.getUserInfo);
-  // 获取用户上传的题目
-  router.post('/getUserUploadQues', controller.user.getUserUploadQues);
-
-  // todo admin
-  // 管理员登录
+  router.post('/resetPassword', controller.user.resetPassword);
+  router.post('/logout', controller.user.logout);
   router.post('/adminLogin', controller.admin.adminLogin);
-  // 修改密码
-  router.post('/editAdminPassword', controller.admin.editAdminPassword);
-  // 获取用户信息列表
-  router.post('/getUserList', controller.admin.getUserList);
-  // 获取未审核的题目
-  router.post('/getNoChkQuestions', controller.admin.getNoChkQuestions);
-  // 所有已审核的题目
-  router.post('/getAllChkQuestions', controller.admin.getAllChkQuestions);
-  // 审核题目
-  router.post('/chkQuestions', controller.admin.chkQuestions);
-  // 删除题目
-  router.post('/deleteQuestions', controller.admin.deleteQuestions);
-  // 试卷审核
-  router.post('/chkPaper', controller.admin.chkPaper);
-  // 所有未审核的试卷
-  router.post('/getNoChkPaper', controller.admin.getNoChkPaper);
-  // 所有已审核的试卷
-  router.post('/getAllChkPaper', controller.admin.getAllChkPaper);
-  // 删除试卷
-  router.post('/deletePaper', controller.admin.deletePaper);
-  // 删除用户
-  router.post('/deleteUser', controller.admin.deleteUser);
-
-  // todo 题目
-  // 题目列表
   router.post('/getQuestions', controller.questions.getQuestions);
-  // 获取题目详情
   router.post('/getQuestionDetail', controller.questions.getQuestionDetail);
-  // 上传题目
-  router.post('/uploadQuestions', controller.questions.uploadQuestions);
-  // 每日一题
   router.get('/getDailyQuestions', controller.questions.getDailyQuestions);
-  // 点赞
-  router.post('/likeQuestions', controller.questions.likeQuestions);
-  // 游览
-  router.post('/addBrowsesNum', controller.questions.addBrowsesNum);
-  // 取消点赞
-  router.post('/cancelLikeQuestions', controller.questions.cancelLikeQuestions);
-  // 相似题目
   router.post('/getSimilarQuestions', controller.questions.getSimilarQuestions);
-  // 搜索题目
   router.post('/searchQuestions', controller.questions.searchQuestions);
-  // 科目列表
+  router.post('/getTagStats', adminAuth, controller.questions.getTagStats);
+  router.post('/renameTag', adminAuth, controller.questions.renameTag);
+  router.post('/deleteTag', adminAuth, controller.questions.deleteTag);
   router.get('/getSubjectList', controller.subjectList.getSubjectList);
-
-  // todo 试卷
-  // 组卷
-  router.post('/getPaperQuestions', controller.paper.getPaperQuestions);
-  // 试卷列表
-  router.post('/getPaperQuestionsList', controller.paper.getPaperQuestionsList);
-  // 试卷详情
+  router.get('/getAnnouncements', controller.announcement.getList);
+  router.get('/getRankingList', controller.rankingList.getRankingList);
+  router.get('/getCommentList', controller.comment.getCommentList);
+  router.post(
+    '/getPaperQuestionsList',
+    controller.paper.getPaperQuestionsList
+  );
   router.post(
     '/getPaperQuestionsDetail',
     controller.paper.getPaperQuestionsDetail
   );
 
-  // todo 排行榜
-  // 获取排行榜
-  router.get('/getRankingList', controller.rankingList.getRankingList);
+  // ===== 需登录接口（auth）=====
+  router.post('/editUserInfo', auth, controller.user.updateUserInfo);
+  router.post('/getUserInfo', auth, controller.user.getUserInfo);
+  router.post('/setDailyGoal', auth, controller.user.setDailyGoal);
+  router.post('/getPublicProfile', auth, controller.user.getPublicProfile);
+  router.post('/getUserUploadQues', auth, controller.user.getUserUploadQues);
+  router.post('/uploadQuestions', auth, controller.questions.uploadQuestions);
+  router.post('/importQuestions', auth, controller.questions.importQuestions);
+  router.post(
+    '/randomPickQuestions',
+    auth,
+    controller.questions.randomPickQuestions
+  );
+  router.post('/likeQuestions', auth, controller.questions.likeQuestions);
+  router.post(
+    '/cancelLikeQuestions',
+    auth,
+    controller.questions.cancelLikeQuestions
+  );
+  router.post('/addBrowsesNum', auth, controller.questions.addBrowsesNum);
+  router.post('/getPaperQuestions', auth, controller.paper.getPaperQuestions);
+  router.post(
+    '/updatePaperPurview',
+    auth,
+    controller.paper.updatePaperPurview
+  );
+  router.post('/addComment', auth, controller.comment.addComment);
+  router.post('/uploadImage', auth, controller.upload.uploadImage);
+  router.post('/likeComment', auth, controller.comment.likeComment);
+  router.post('/unlikeComment', auth, controller.comment.unlikeComment);
+  router.post('/checkin', auth, controller.checkin.checkin);
+  router.post('/getCheckinInfo', auth, controller.checkin.getCheckinInfo);
+  router.post('/favoriteQuestion', auth, controller.favorite.add);
+  router.post(
+    '/cancelFavoriteQuestion',
+    auth,
+    controller.favorite.remove
+  );
+  router.post('/getMyFavorites', auth, controller.favorite.getList);
+  router.post('/followUser', auth, controller.follow.follow);
+  router.post('/unfollowUser', auth, controller.follow.unfollow);
+  router.post('/getFollowing', auth, controller.follow.getFollowing);
+  router.post('/getFollowers', auth, controller.follow.getFollowers);
+  router.post('/getFollowCounts', auth, controller.follow.getCounts);
+  router.post('/sendMessage', auth, controller.message.send);
+  router.post('/getConversations', auth, controller.message.getConversations);
+  router.post('/getMessages', auth, controller.message.getMessages);
+  router.post('/markMessagesRead', auth, controller.message.markRead);
+  router.post('/getUnreadMessageCount', auth, controller.message.getUnreadCount);
+  router.post('/submitFeedback', auth, controller.feedback.submitFeedback);
+  router.post('/getMyFeedback', auth, controller.feedback.getMyFeedback);
+  router.post('/submitPaper', auth, controller.answer.submitPaper);
+  router.post('/getMyPaperRecords', auth, controller.answer.getMyPaperRecords);
+  router.post('/getAnswerStats', auth, controller.answer.getAnswerStats);
+  router.post('/getWrongQuestions', auth, controller.answer.getWrongQuestions);
+  router.post(
+    '/clearWrongQuestions',
+    auth,
+    controller.answer.clearWrongQuestions
+  );
+  router.post('/getNotifications', auth, controller.notification.getNotifications);
+  router.post('/getUnreadCount', auth, controller.notification.getUnreadCount);
+  router.post(
+    '/markNotificationRead',
+    auth,
+    controller.notification.markRead
+  );
+  router.post(
+    '/markAllNotificationsRead',
+    auth,
+    controller.notification.markAllRead
+  );
 
-  // todo 评论
-  // 添加评论
-  router.post('/addComment', controller.comment.addComment);
-  // 获取评论列表
-  router.get('/getCommentList', controller.comment.getCommentList);
-  // 删除评论
-  router.post('/deleteComment', controller.comment.deleteComment);
+  // ===== 管理员接口（adminAuth）=====
+  router.post(
+    '/editAdminPassword',
+    adminAuth,
+    controller.admin.editAdminPassword
+  );
+  router.post('/getUserList', adminAuth, controller.admin.getUserList);
+  router.post(
+    '/getAdminStatistics',
+    adminAuth,
+    controller.admin.getStatistics
+  );
+  router.post(
+    '/getNoChkQuestions',
+    adminAuth,
+    controller.admin.getNoChkQuestions
+  );
+  router.post(
+    '/getAllChkQuestions',
+    adminAuth,
+    controller.admin.getAllChkQuestions
+  );
+  router.post('/chkQuestions', adminAuth, controller.admin.chkQuestions);
+  router.post('/deleteQuestions', adminAuth, controller.admin.deleteQuestions);
+  router.post('/updateQuestion', adminAuth, controller.questions.updateQuestion);
+  router.post('/chkPaper', adminAuth, controller.admin.chkPaper);
+  router.post('/getNoChkPaper', adminAuth, controller.admin.getNoChkPaper);
+  router.post('/getAllChkPaper', adminAuth, controller.admin.getAllChkPaper);
+  router.post('/deletePaper', adminAuth, controller.admin.deletePaper);
+  router.post('/deleteUser', adminAuth, controller.admin.deleteUser);
+  router.post(
+    '/getDeletedQuestions',
+    adminAuth,
+    controller.admin.getDeletedQuestions
+  );
+  router.post('/restoreQuestion', adminAuth, controller.admin.restoreQuestion);
+  router.post('/getDeletedPapers', adminAuth, controller.admin.getDeletedPapers);
+  router.post('/restorePaper', adminAuth, controller.admin.restorePaper);
+  router.post('/getDeletedUsers', adminAuth, controller.admin.getDeletedUsers);
+  router.post('/restoreUser', adminAuth, controller.admin.restoreUser);
+  router.post('/deleteComment', adminAuth, controller.comment.deleteComment);
+  router.post(
+    '/getDeletedComments',
+    adminAuth,
+    controller.comment.getDeletedComments
+  );
+  router.post(
+    '/restoreComment',
+    adminAuth,
+    controller.comment.restoreComment
+  );
+  router.post('/approveComment', adminAuth, controller.comment.approveComment);
+  router.post('/pinComment', adminAuth, controller.comment.pinComment);
+  router.post(
+    '/getSubjectiveReviews',
+    adminAuth,
+    controller.answer.getSubjectiveReviews
+  );
+  router.post(
+    '/reviewSubjective',
+    adminAuth,
+    controller.answer.reviewSubjective
+  );
+  router.post('/getFeedbackList', adminAuth, controller.feedback.getFeedbackList);
+  router.post('/resolveFeedback', adminAuth, controller.feedback.resolveFeedback);
+  router.post(
+    '/getUnresolvedFeedbackCount',
+    adminAuth,
+    controller.feedback.getUnresolvedCount
+  );
+  router.post(
+    '/getSensitiveWords',
+    adminAuth,
+    controller.sensitiveWord.getList
+  );
+  router.post('/addSensitiveWord', adminAuth, controller.sensitiveWord.add);
+  router.post(
+    '/deleteSensitiveWord',
+    adminAuth,
+    controller.sensitiveWord.remove
+  );
+  router.post(
+    '/getDeletedSensitiveWords',
+    adminAuth,
+    controller.sensitiveWord.getDeletedList
+  );
+  router.post(
+    '/restoreSensitiveWord',
+    adminAuth,
+    controller.sensitiveWord.restore
+  );
+  router.post('/addAnnouncement', adminAuth, controller.announcement.add);
+  router.post(
+    '/deleteAnnouncement',
+    adminAuth,
+    controller.announcement.remove
+  );
+  router.post(
+    '/getDeletedAnnouncements',
+    adminAuth,
+    controller.announcement.getDeletedList
+  );
+  router.post(
+    '/restoreAnnouncement',
+    adminAuth,
+    controller.announcement.restore
+  );
 };

@@ -11,6 +11,7 @@ logs/
 *.lock
 *.js
 !.autod.conf.js
+!app.js
 
 app/**/*.js
 test/**/*.js
@@ -18,3 +19,12 @@ config/**/*.js
 app/**/*.map
 test/**/*.map
 config/**/*.map
+
+# tsc 编译产物（类型声明）
+*.d.ts
+app/**/*.d.ts
+test/**/*.d.ts
+config/**/*.d.ts
+
+# egg-ts-helper 自动生成的类型声明
+typings/
