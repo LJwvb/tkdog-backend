@@ -21,6 +21,55 @@ export default class answer extends Controller {
       ctx.fail('交卷失败，请稍后重试~');
     }
   }
+  // AI 批改简答题（主观题），并计入成绩
+  public async aiJudgeAnswer() {
+    const { ctx } = this;
+    const { questionId, userAnswer, recordId } = ctx.request.body;
+    if (!questionId) {
+      ctx.fail('questionId不能为空~');
+      return;
+    }
+    // 未配置 AI 时告知前端降级，而不是报错
+    if (!ctx.service.ai.isConfigured()) {
+      ctx.success(
+        { available: false, message: 'AI 判分未配置，请对照参考答案自行复核' },
+        '请求成功',
+      );
+      return;
+    }
+    // 限流：防止恶意刷接口消耗大模型额度
+    if (ctx.service.ai.isRateLimited(ctx.currentUserId())) {
+      ctx.success(
+        { available: false, message: 'AI 判分过于频繁，请稍后再试' },
+        '请求成功',
+      );
+      return;
+    }
+    const outcome = await ctx.service.ai.judgeByQuestionId(
+      Number(questionId),
+      String(userAnswer ?? ''),
+    );
+    if (outcome) {
+      // 判分结果落库并重算整卷统计（recordId 为交卷返回的 paper_record.id）
+      let stats: any = null;
+      if (recordId) {
+        stats = await ctx.service.answer.applyAiGrade(
+          Number(recordId),
+          Number(questionId),
+          Number(outcome.score),
+        );
+      }
+      ctx.success(
+        { available: true, ...outcome, stats },
+        'AI 批改完成',
+      );
+    } else {
+      ctx.success(
+        { available: false, message: 'AI 批改失败，请对照参考答案自行复核' },
+        '请求成功',
+      );
+    }
+  }
   // 我的答题记录
   public async getMyPaperRecords() {
     const { ctx } = this;
@@ -71,34 +120,6 @@ export default class answer extends Controller {
       ctx.success(null, '错题已清空~');
     } else {
       ctx.fail('清空失败~');
-    }
-  }
-  // 主观题待复核列表（管理员）
-  public async getSubjectiveReviews() {
-    const { ctx } = this;
-    const result = await ctx.service.answer.getSubjectiveReviews();
-    if (result) {
-      ctx.success(result, '请求成功');
-    } else {
-      ctx.fail('获取待复核列表失败~');
-    }
-  }
-  // 人工复核主观题（管理员）
-  public async reviewSubjective() {
-    const { ctx } = this;
-    const { id, correct } = ctx.request.body;
-    if (!id) {
-      ctx.fail('id不能为空~');
-      return;
-    }
-    const result = await ctx.service.answer.reviewSubjective(
-      Number(id),
-      Boolean(correct),
-    );
-    if (result) {
-      ctx.success(null, correct ? '已判为正确' : '已判为错误');
-    } else {
-      ctx.fail('操作失败~');
     }
   }
 }

@@ -56,8 +56,6 @@ export default class questions extends Controller {
       userId: ctx.currentUserId(),
       addDate: getNowFormatDate(),
       chkState: 0,
-      isChoice: 0,
-      publishState: 0,
       catalogID: 0, // 最新
     });
     if (result) {
@@ -86,6 +84,8 @@ export default class questions extends Controller {
       answer,
       difficulty,
       tags: tags || '',
+      updateTime: getNowFormatDate(),
+      updateUser: ctx.currentAdminName() || ctx.currentUsername() || '',
     });
     if (result) {
       ctx.success(null, '修改成功~');

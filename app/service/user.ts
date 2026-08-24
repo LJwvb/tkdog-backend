@@ -28,7 +28,26 @@ interface CaptchaParams {
   background?: string; // 验证码图片背景颜色
 }
 
+// 登录接口限流（按 IP 滑动窗口，防暴力破解；单进程有效）
+const loginWindows = new Map<string, number[]>();
+
 export default class User extends Service {
+  // 登录是否触发限流（按 IP 滑动窗口）
+  public isLoginRateLimited(ip: string | undefined): boolean {
+    const windowMs = 60000;
+    const max = 20;
+    const now = Date.now();
+    const key = ip || 'unknown';
+    const arr = (loginWindows.get(key) || []).filter(t => now - t < windowMs);
+    if (arr.length >= max) {
+      loginWindows.set(key, arr);
+      return true;
+    }
+    arr.push(now);
+    loginWindows.set(key, arr);
+    return false;
+  }
+
   // 登录
   public async login(params: LoginParams) {
     const { app } = this;

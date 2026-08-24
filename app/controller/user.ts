@@ -10,6 +10,11 @@ export default class User extends Controller {
       ctx.fail('账号密码不能为空');
       return;
     }
+    // 防暴力破解：按 IP 限流
+    if (ctx.service.user.isLoginRateLimited(ctx.ip)) {
+      ctx.fail('登录过于频繁，请稍后再试');
+      return;
+    }
     const data = await ctx.service.user.login({ password, phone });
 
     if (data) {

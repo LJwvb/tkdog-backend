@@ -10,6 +10,11 @@ export default class comment extends Controller {
       ctx.fail('请填写完整信息~');
       return;
     }
+    const imageList = Array.isArray(images) ? images : [];
+    if (imageList.length > 9) {
+      ctx.fail('每条评论最多上传 9 张图片~');
+      return;
+    }
     if (!(await ctx.service.questions.isApproved(questionId))) {
       ctx.fail('该题目未通过审核，无法评论~');
       return;
@@ -25,7 +30,7 @@ export default class comment extends Controller {
       questionId: Number(questionId),
       parentId,
       replyUsername,
-      images,
+      images: imageList,
       userId: ctx.currentUserId(),
       status: check.review ? 0 : 1,
     });

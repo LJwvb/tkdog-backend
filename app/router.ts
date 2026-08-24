@@ -81,14 +81,11 @@ export default (app: Application) => {
   router.post('/getFollowing', auth, controller.follow.getFollowing);
   router.post('/getFollowers', auth, controller.follow.getFollowers);
   router.post('/getFollowCounts', auth, controller.follow.getCounts);
-  router.post('/sendMessage', auth, controller.message.send);
-  router.post('/getConversations', auth, controller.message.getConversations);
-  router.post('/getMessages', auth, controller.message.getMessages);
-  router.post('/markMessagesRead', auth, controller.message.markRead);
-  router.post('/getUnreadMessageCount', auth, controller.message.getUnreadCount);
   router.post('/submitFeedback', auth, controller.feedback.submitFeedback);
   router.post('/getMyFeedback', auth, controller.feedback.getMyFeedback);
   router.post('/submitPaper', auth, controller.answer.submitPaper);
+  // AI 批改简答题（主观题）
+  router.post('/aiJudgeAnswer', auth, controller.answer.aiJudgeAnswer);
   router.post('/getMyPaperRecords', auth, controller.answer.getMyPaperRecords);
   router.post('/getAnswerStats', auth, controller.answer.getAnswerStats);
   router.post('/getWrongQuestions', auth, controller.answer.getWrongQuestions);
@@ -163,16 +160,6 @@ export default (app: Application) => {
   );
   router.post('/approveComment', adminAuth, controller.comment.approveComment);
   router.post('/pinComment', adminAuth, controller.comment.pinComment);
-  router.post(
-    '/getSubjectiveReviews',
-    adminAuth,
-    controller.answer.getSubjectiveReviews
-  );
-  router.post(
-    '/reviewSubjective',
-    adminAuth,
-    controller.answer.reviewSubjective
-  );
   router.post('/getFeedbackList', adminAuth, controller.feedback.getFeedbackList);
   router.post('/resolveFeedback', adminAuth, controller.feedback.resolveFeedback);
   router.post(

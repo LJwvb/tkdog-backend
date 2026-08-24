@@ -1,4 +1,5 @@
 import { Service } from 'egg';
+import { compareTwoStrings } from 'string-similarity';
 import { getSubjectName, getCatalogName, getNowFormatDate } from '../utils';
 
 // 批量导入：规范化客观题答案字母（A,C -> AC，去分隔符、转大写）
@@ -44,17 +45,10 @@ interface IUploadQuestions {
   addDate: string; // 添加时间
   tags: string; // 标签
   questionType: 0 | 1 | 2 | 3 | 4; // 题目类型 0: '单选题' 1: '多选题' 2: '判断题' 3: '填空题'4: '简答题'
-  remarks?: string; // 备注
   number?: number; // 试题编号
-  direction: string; // 题目方向
   difficulty: 0 | 1 | 2; // 难度 0:'简单'1:'中等'2:'困难'
-  isChoice?: 0 | 1; // 是否精选 0:否 1:是
-  publishState?: 0 | 1 | 2; // 发布状态 0:未发布 1:已发布 2:已下架
-  publishDate?: string; // 发布时间
   chkState?: 0 | 1 | 2; // 审核状态 0:未审核 1:审核通过 2:审核不通过
-  chkUser?: string; // 审核人
   chkRemarks?: string; // 审核备注
-  chkDate?: string; // 审核时间
   creator: string; // 创建人
   userId?: number; // 上传者 userId（用于关联表）
 }
@@ -155,14 +149,14 @@ export default class questions extends Service {
       if (type === 'user') {
         const questionIds: any =
           ids && ids.split(',').filter((x: string) => x !== '');
-        // 空 ids 直接返回空结果，避免 `in ()` SQL 语法错误
+        // 空ids 直接返回空结果，避免 `in ()` SQL 语法错误
         if (!questionIds || questionIds.length === 0) {
           return { result: [], total: 0 };
         }
+        // 参数化查询：egg-mysql 对 `in (?)` 传数组会自动展开占位符，避免 SQL 注入
         const result: any = await app.mysql.query(
-          `select * from questions where id in (${questionIds}) and chkState = 1 and is_deleted = 0 limit ${pageSize} offset ${
-            (currentPage - 1) * pageSize
-          }`,
+          'select * from questions where id in (?) and chkState = 1 and is_deleted = 0 limit ? offset ?',
+          [ questionIds, pageSize, (currentPage - 1) * pageSize ],
         );
         const total = await app.mysql.count('questions', {
           id: questionIds,
@@ -203,12 +197,10 @@ export default class questions extends Service {
     const { app } = this;
     const { id, userId } = params;
     try {
-      // 获取当前题目的点赞数量
-      const questions: any = await app.mysql.get('questions', { id });
-      const result = await app.mysql.update(
-        'questions',
-        { likes_num: questions.likes_num + 1 },
-        { where: { id } },
+      // 原子自增，避免并发下"先查后写"丢计数
+      const result: any = await app.mysql.query(
+        'UPDATE questions SET likes_num = likes_num + 1 WHERE id = ?',
+        [ id ],
       );
       // 记录点赞关系（关联表，直接使用 userId）
       await app.mysql.insert('user_like_question', {
@@ -226,12 +218,10 @@ export default class questions extends Service {
     const { app } = this;
     const { id, userId } = params;
     try {
-      // 获取当前题目的点赞数量
-      const questions: any = await app.mysql.get('questions', { id });
-      const result = await app.mysql.update(
-        'questions',
-        { likes_num: questions.likes_num - 1 },
-        { where: { id } },
+      // 原子自减，并用 GREATEST 保证不出现负数
+      const result: any = await app.mysql.query(
+        'UPDATE questions SET likes_num = GREATEST(likes_num - 1, 0) WHERE id = ?',
+        [ id ],
       );
       // 删除点赞关系（关联表，直接使用 userId）
       await app.mysql.delete('user_like_question', {
@@ -244,17 +234,14 @@ export default class questions extends Service {
       return null;
     }
   }
-  // 浏览数
+  // 浏览数（原子自增）
   public async addBrowsesNum(params) {
     const { app } = this;
     const { id } = params;
     try {
-      const questions: any = await app.mysql.get('questions', { id });
-
-      const result = await app.mysql.update(
-        'questions',
-        { browses_num: questions.browses_num + 1 },
-        { where: { id } },
+      const result: any = await app.mysql.query(
+        'UPDATE questions SET browses_num = browses_num + 1 WHERE id = ?',
+        [ id ],
       );
       return result;
     } catch (err) {
@@ -310,12 +297,9 @@ export default class questions extends Service {
           answer: q.answer,
           questionDetail: q.questionDetail,
           tags: q.tags,
-          direction: '',
           creator,
           addDate: getNowFormatDate(),
           chkState: isAdmin ? 1 : 0,
-          isChoice: 0,
-          publishState: isAdmin ? 1 : 0,
           catalogID: 0,
           browses_num: 0,
           likes_num: 0,
@@ -389,8 +373,9 @@ export default class questions extends Service {
       };
       const picked: any[] = [];
       for (const qt of [ 0, 1, 2, 3 ]) {
-        const n = spec[qt];
-        if (!n || n <= 0) continue;
+        // 后端同样限制单题型抽题上限，避免超大数据集
+        const n = Math.min(50, Math.max(0, Number(spec[qt]) || 0));
+        if (!n) continue;
         const where: string[] = [ 'chkState = 1', 'is_deleted = 0', 'questionType = ?' ];
         const values: any[] = [ String(qt) ];
         if (subjectID !== undefined && subjectID !== null && subjectID !== '') {
@@ -426,7 +411,7 @@ export default class questions extends Service {
     }
   }
 
-  // 相似题目（基于结构化信息 + 关键词的综合评分）
+  // 相似题目（结构化特征加权 + string-similarity 题干 Dice 系数综合评分）
   public async getSimilarQuestions(params) {
     const { app } = this;
     const { id } = params;
@@ -438,7 +423,7 @@ export default class questions extends Service {
       });
       if (!current) return [];
 
-      // 所有已审核题目
+      // 候选集：同科目或标签/关键词可能相关的已审核题目（缩小扫描范围）
       const all: any = await app.mysql.query(
         'select * from questions where chkState = 1 and is_deleted = 0',
       );
@@ -482,6 +467,13 @@ export default class questions extends Service {
           if (itemKeywords.includes(k)) kwOverlap++;
         });
         score += kwOverlap;
+        // 题干文本相似度：string-similarity（Dice 系数，0~1），权重 4
+        // 用于捕捉"换了说法但本质相同"的重复题
+        const dice = compareTwoStrings(
+          String(current.question || ''),
+          String(item.question || ''),
+        );
+        score += dice * 4;
 
         if (score > 0) {
           scored.push({ item, score });

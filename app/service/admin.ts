@@ -1,24 +1,25 @@
 /* eslint-disable comma-dangle */
 import { Service } from 'egg';
+import bcrypt from 'bcryptjs';
 import { getNowFormatDate, getSubjectName } from '../utils';
 
 interface IChkQuestions {
   id: number | string; // 题目ID
   chkState?: 0 | 1 | 2; // 审核状态 0:未审核 1:审核通过 2:审核不通过
-  chkUser?: string; // 审核人
-  creator?: string; // 创建人
   chkRemarks?: string; // 审核备注
-  chkDate?: string; // 审核时间
-  publishDate?: string; // 发布时间
-  publishState?: 0 | 1 | 2; // 发布状态 0:未发布 1:已发布 2:已下架
 }
 
 export default class admin extends Service {
   // 管理员登录
   public async adminLogin(params) {
     const { app } = this;
+    const { name, password } = params;
     try {
-      const result: any = await app.mysql.get('admin', params);
+      // 先按用户名查，再 bcrypt 校验密码（不再明文比对）
+      const result: any = await app.mysql.get('admin', { name });
+      if (!result) return null;
+      const ok = await bcrypt.compare(password, result.password);
+      if (!ok) return null;
       // 更新登录时间
       await app.mysql.update(
         'admin',
@@ -43,10 +44,11 @@ export default class admin extends Service {
     const { app } = this;
     const { id, password } = params;
     try {
+      const hashed = await bcrypt.hash(password, 10);
       const result = await app.mysql.update(
         'admin',
         {
-          password,
+          password: hashed,
         },
         {
           where: { id },
@@ -67,19 +69,22 @@ export default class admin extends Service {
       );
       const admin = await app.mysql.select('admin');
       const list: any[] = [ ...admin, ...user ];
+      // 一次性按 creator 聚合题目统计，避免逐用户查询（N+1）
+      const statsRows: any = await app.mysql.query(
+        'SELECT creator, COUNT(*) AS upload_ques_num, ' +
+          'COALESCE(SUM(likes_num),0) AS like_ques_num, ' +
+          'COALESCE(SUM(CASE WHEN chkState=1 THEN 1 ELSE 0 END), 0) AS approvedNums ' +
+          'FROM questions WHERE is_deleted = 0 GROUP BY creator',
+      );
+      const statsMap = new Map<string, any>();
+      statsRows.forEach((r: any) => statsMap.set(r.creator, r));
       for (const item of list) {
         const creator = item.username || item.name;
         if (creator) {
-          const stats = await app.mysql.query(
-            'SELECT COUNT(*) AS upload_ques_num, ' +
-              'COALESCE(SUM(likes_num),0) AS like_ques_num, ' +
-              'COALESCE(SUM(CASE WHEN chkState=1 THEN 1 ELSE 0 END), 0) AS approvedNums ' +
-              'FROM questions WHERE creator = ? AND is_deleted = 0',
-            [ creator ],
-          );
-          item.upload_ques_num = stats[0].upload_ques_num;
-          item.like_ques_num = stats[0].like_ques_num;
-          item.approvedNums = stats[0].approvedNums;
+          const stats = statsMap.get(creator);
+          item.upload_ques_num = Number(stats?.upload_ques_num) || 0;
+          item.like_ques_num = Number(stats?.like_ques_num) || 0;
+          item.approvedNums = Number(stats?.approvedNums) || 0;
         }
         // 普通用户积分用与用户端完全一致的 computePoints 实时计算（上传×2 + 审核通过×5 + 答对×1 + 打卡×5）
         if (item.userId) {
@@ -251,9 +256,11 @@ export default class admin extends Service {
   public async chkQuestions(params: IChkQuestions) {
     const { app } = this;
     try {
-      const result = await app.mysql.update('questions', params, {
-        where: { id: params.id },
-      });
+      const result = await app.mysql.update(
+        'questions',
+        { chkState: params.chkState, chkRemarks: params.chkRemarks || null },
+        { where: { id: params.id } },
+      );
       // 统计字段（获赞/上传/审核通过数）已改为实时计算，无需在此维护冗余字段
       // 审核结果通知上传者
       const question: any = await app.mysql.get('questions', { id: params.id });
@@ -268,13 +275,15 @@ export default class admin extends Service {
               : Number(params.chkState) === 2
                 ? '审核不通过'
                 : '待审核';
+          // 审核建议：与默认状态文案相同时不再重复拼接，自定义建议才附上并通知用户
+          const remark = String(params.chkRemarks || '').trim();
+          const remarkText =
+            remark && remark !== stateText ? `，审核建议：${remark}` : '';
           await this.service.notification.create({
             userId: upload.user_id,
             type: 'question_review',
             title: `题目${stateText}`,
-            content: `你上传的题目「${question.question || ''}」${stateText}${
-              params.chkRemarks ? '，备注：' + params.chkRemarks : ''
-            }`,
+            content: `你上传的题目「${question.question || ''}」${stateText}${remarkText}`,
           });
         }
       }

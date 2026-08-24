@@ -27,9 +27,9 @@ export default class paper extends Controller {
       ctx.fail(`题目数量不能少于${minCount}道~`);
       return;
     }
-    // 不能大于20道题
-    if (arrayIds.length > 20) {
-      ctx.fail('组卷失败,题目数量不能大于20道~');
+    // 不能大于50道题
+    if (arrayIds.length > 50) {
+      ctx.fail('组卷失败,题目数量不能大于50道~');
       return;
     }
     const result = await ctx.service.paper.getPaperQuestions({

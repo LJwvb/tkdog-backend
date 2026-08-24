@@ -1,6 +1,6 @@
 /* eslint-disable comma-dangle */
 import { Controller } from 'egg';
-import { getNowFormatDate, removePassword } from '../utils';
+import { removePassword } from '../utils';
 
 export default class admin extends Controller {
   // 管理员登录
@@ -90,7 +90,7 @@ export default class admin extends Controller {
   // 审核题目
   public async chkQuestions() {
     const { ctx } = this;
-    const { id, chkState, chkUser, chkRemarks, creator } = ctx.request.body;
+    const { id, chkState, chkRemarks } = ctx.request.body;
     if (!id || !chkState) {
       ctx.fail('请填写完整信息~');
       return;
@@ -98,12 +98,7 @@ export default class admin extends Controller {
     const result = await ctx.service.admin.chkQuestions({
       id,
       chkState,
-      chkUser,
-      creator,
       chkRemarks,
-      chkDate: getNowFormatDate(),
-      publishDate: getNowFormatDate(),
-      publishState: 1,
     });
     if (result) {
       ctx.success(null, '审核成功~');

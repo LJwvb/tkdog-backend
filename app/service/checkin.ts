@@ -38,7 +38,12 @@ export default class checkin extends Service {
         'SELECT DISTINCT checkin_date FROM checkin WHERE user_id = ? ORDER BY checkin_date DESC',
         [ userId ],
       );
-      const dates = new Set(rows.map((r: any) => r.checkin_date));
+      // checkin_date 为 date 类型，驱动可能返回 Date 对象，统一转成 YYYY-MM-DD 字符串再比较
+      const toDateStr = (v: any) => {
+        const d = v instanceof Date ? v : new Date(v);
+        return formatDate(d);
+      };
+      const dates = new Set(rows.map((r: any) => toDateStr(r.checkin_date)));
       let cursor = new Date();
       // 今天未打卡时，从昨天开始连续计数
       if (!dates.has(formatDate(cursor))) {

@@ -1,10 +1,44 @@
 import { Service } from 'egg';
+import fs from 'fs';
+import path from 'path';
+
+// 解析评论图片 URL 数组（只保留本站上传的图片路径）
+function parseImageUrls(imagesJson: string | null | undefined): string[] {
+  if (!imagesJson) return [];
+  try {
+    const arr = JSON.parse(imagesJson);
+    if (!Array.isArray(arr)) return [];
+    return arr.filter(
+      (u: any) => typeof u === 'string' && /^\/public\/uploads\/[\w.-]+$/.test(u),
+    );
+  } catch {
+    return [];
+  }
+}
+
+// 删除评论关联的图片文件（只处理本站 uploads 目录，防路径穿越）
+function deleteImageFiles(app: any, urls: string[]) {
+  if (!urls.length) return;
+  const dir = path.join(app.baseDir, 'app/public/uploads');
+  for (const url of urls) {
+    const m = /^\/public\/uploads\/([\w.-]+)$/.exec(url);
+    if (!m) continue;
+    const target = path.join(dir, m[1]);
+    if (fs.existsSync(target)) {
+      try {
+        fs.unlinkSync(target);
+      } catch {
+        // 忽略删除失败
+      }
+    }
+  }
+}
 
 export default class comment extends Service {
   // 添加评论（关联题目，支持回复楼层）
   public async addComment(params) {
     const { app } = this;
-    const { userId, questionId, parentId, replyUsername } = params;
+    const { userId, questionId, parentId } = params;
     try {
       // 查找用户是否存在
       const user: any = await app.mysql.get('user', { userId });
@@ -15,18 +49,19 @@ export default class comment extends Service {
         user_id: userId,
         question_id: questionId,
         content: params.content,
-        username: user.username,
         // 命中「待审核」词时先隐藏，等管理员审核通过后展示
         status: params.status === 0 ? 0 : 1,
-        // 头像不再冗余存储，展示时从 user 表关联取
+        // 用户名/头像不再冗余存储，展示时从 user 表关联取
       };
       if (parentId) {
         data.parent_id = Number(parentId);
-        data.reply_username = replyUsername || null;
       }
-      // 评论图片（图片 URL 数组）
-      if (Array.isArray(params.images) && params.images.length) {
-        data.images = JSON.stringify(params.images);
+      // 评论图片：只保留本站上传的图片 URL
+      const images = parseImageUrls(
+        Array.isArray(params.images) ? JSON.stringify(params.images) : null,
+      );
+      if (images.length) {
+        data.images = JSON.stringify(images);
       }
       const result: any = await app.mysql.insert('comment', data);
       // 通知题目上传者收到新评论（评论者本人不通知），并携带题目/评论ID用于点击跳转定位
@@ -57,12 +92,14 @@ export default class comment extends Service {
     const { app } = this;
     const { questionId, onlyApproved, currentPage = 1, pageSize = 10, userId } = params || {};
     try {
-      // 头像从 user 表关联取，题目题干从 questions 表关联取，避免冗余存储
+      // 头像/用户名从 user 表关联取，题目题干从 questions 表关联取，避免冗余存储
       let sql =
-        'SELECT c.id, c.user_id, c.question_id, c.content, c.username, c.create_time, ' +
-        'c.parent_id, c.reply_username, c.status, c.is_pinned, c.images, u.avatar, q.question AS question_title ' +
+        'SELECT c.id, c.user_id, c.question_id, c.content, u.username, c.create_time, ' +
+        'c.parent_id, pu.username AS reply_username, c.status, c.is_pinned, c.images, u.avatar, q.question AS question_title ' +
         'FROM comment c ' +
         'LEFT JOIN user u ON c.user_id = u.userId ' +
+        'LEFT JOIN comment pc ON c.parent_id = pc.id ' +
+        'LEFT JOIN user pu ON pc.user_id = pu.userId ' +
         'LEFT JOIN questions q ON c.question_id = q.id';
       const where: string[] = [ 'c.is_deleted = 0' ];
       const values: any = [];
@@ -191,7 +228,7 @@ export default class comment extends Service {
       return null;
     }
   }
-  // 删除评论（软删除：标记 is_deleted，级联标记其所有子回复，不物理删除）
+  // 删除评论（软删除：标记 is_deleted，级联标记其所有子回复，并清理关联图片文件）
   public async deleteComment(id) {
     const { app } = this;
     try {
@@ -208,10 +245,17 @@ export default class comment extends Service {
       };
       const ids = [ rootId ];
       await collect(rootId, ids);
-      const result = await app.mysql.query(
-        'UPDATE comment SET is_deleted = 1 WHERE id IN (?)',
+      // 读取待删评论的图片，用于清理磁盘文件
+      const rows: any = await app.mysql.query(
+        'SELECT images FROM comment WHERE id IN (?)',
         [ ids ],
       );
+      const urls = rows.flatMap((r: any) => parseImageUrls(r.images));
+      const result = await app.mysql.query(
+        'UPDATE comment SET is_deleted = 1, images = NULL WHERE id IN (?)',
+        [ ids ],
+      );
+      deleteImageFiles(app, urls);
       return result;
     } catch (err) {
       return null;
@@ -222,11 +266,13 @@ export default class comment extends Service {
     const { app } = this;
     try {
       const result = await app.mysql.query(
-        'SELECT c.id, c.user_id, c.question_id, c.content, c.username, c.create_time, ' +
-        'c.parent_id, c.reply_username, c.status, c.is_pinned, c.images, u.avatar, ' +
+        'SELECT c.id, c.user_id, c.question_id, c.content, u.username, c.create_time, ' +
+        'c.parent_id, pu.username AS reply_username, c.status, c.is_pinned, c.images, u.avatar, ' +
         'q.question AS question_title ' +
         'FROM comment c ' +
         'LEFT JOIN user u ON c.user_id = u.userId ' +
+        'LEFT JOIN comment pc ON c.parent_id = pc.id ' +
+        'LEFT JOIN user pu ON pc.user_id = pu.userId ' +
         'LEFT JOIN questions q ON c.question_id = q.id ' +
         'WHERE c.is_deleted = 1 ORDER BY c.create_time DESC',
       );

@@ -27,14 +27,6 @@ function stripHtml(html: string | undefined): string {
     .trim();
 }
 
-// 去掉 HTML / 空白 / 标点，只保留中英文数字，并转小写（用于宽松比较）
-function normalizeText(input: string | undefined): string {
-  return stripHtml(input)
-    .toLowerCase()
-    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '')
-    .trim();
-}
-
 // 规范化答案：去空白、去分隔符、转大写，多选排序后拼接
 function normalizeAnswer(answer: unknown): string {
   if (answer == null) return '';
@@ -98,30 +90,6 @@ function matchOptionValue(
     // ignore
   }
   return null;
-}
-
-// 英文停用词
-const STOPWORDS_EN = new Set([
-  'the', 'a', 'an', 'of', 'to', 'in', 'and', 'or', 'is', 'are', 'on', 'at',
-  'for', 'with', 'as', 'by', 'this', 'that', 'it', 'be', 'we', 'you', 'i',
-  'he', 'she', 'they', 'them', 'do', 'does', 'did', 'can', 'will', 'would',
-]);
-
-// 中文常见虚字（用于过滤无意义的 2 字片段）
-const CHINESE_STOP_CHARS = /[的了吗呢吧啊呀哦着过得地和与或及并而但就都也还又再很太更最不没有在是会能可要将被把从对向于给为当如若因所其此该某各每之乎者也个们]/;
-
-// 提取关键词：英文/数字词 + 中文 2 字片段（去停用）
-function extractKeywords(text: string): string[] {
-  const words = new Set<string>();
-  (text.match(/[a-z0-9][a-z0-9.+#-]*/g) || []).forEach(w => {
-    if (w.length >= 2 && !STOPWORDS_EN.has(w)) words.add(w);
-  });
-  const chinese = text.replace(/[a-z0-9]/g, '');
-  for (let i = 0; i + 1 < chinese.length; i++) {
-    const bigram = chinese.slice(i, i + 2);
-    if (!CHINESE_STOP_CHARS.test(bigram)) words.add(bigram);
-  }
-  return [ ...words ];
 }
 
 // 提取客观题（单选/多选/判断）的正确答案
@@ -197,25 +165,29 @@ function isObjectiveCorrect(
   return sortLetters(user) === sortLetters(std);
 }
 
-// 主观题宽松判定：命中要点关键词即判对；未命中不判错（仍待对照）
-function judgeSubjective(
-  userAnswer: string,
-  correctHtml: string | undefined,
-): 1 | null {
-  const userText = normalizeText(userAnswer);
-  const refText = normalizeText(correctHtml);
-  if (!userText || !refText) return null;
-  // 直接包含关系
-  if (refText.includes(userText) || userText.includes(refText)) return 1;
-  const refKw = extractKeywords(refText);
-  if (refKw.length === 0) return null;
-  const userSet = new Set(extractKeywords(userText));
-  const hits = refKw.filter(k => userSet.has(k));
-  // 命中任意英文/数字关键词，或中文重合 >= 2 个片段，即认为答到要点
-  const enHit = hits.filter(k => /^[a-z0-9]/.test(k)).length;
-  if (enHit >= 1) return 1;
-  if (hits.length >= 2) return 1;
-  return null;
+// 难度权重：简单(0)=1、中等(1)=2、困难(2)=3，其余按简单处理
+function difficultyWeight(difficulty: number): number {
+  if (difficulty === 2) return 3;
+  if (difficulty === 1) return 2;
+  return 1;
+}
+
+// 按难度权重动态分配每题满分（整数、总和=100，最大余数法）
+function computeQuestionScores(questions: any[]): number[] {
+  const weights = questions.map(q => difficultyWeight(Number(q.difficulty)));
+  const totalWeight =
+    weights.reduce((s, w) => s + w, 0) || questions.length || 1;
+  const ideals = weights.map(w => (100 * w) / totalWeight);
+  const bases = ideals.map(v => Math.floor(v));
+  let remainder = 100 - bases.reduce((s, b) => s + b, 0);
+  // 余数按小数部分从大到小分配，保证每题为整数且总和恒等于 100
+  const order = ideals
+    .map((v, i) => ({ i, frac: v - bases[i] }))
+    .sort((a, b) => b.frac - a.frac);
+  for (let k = 0; k < remainder; k++) {
+    bases[order[k].i] += 1;
+  }
+  return bases;
 }
 
 export default class answer extends Service {
@@ -248,11 +220,16 @@ export default class answer extends Service {
       let wrongNum = 0;
       let subjectiveNum = 0;
       const detail: any[] = [];
+      // 满分 100，按难度权重动态分配每题满分（整数、总和=100）
+      const questionNum = questions.length;
+      const questionScores = computeQuestionScores(questions);
 
-      for (const q of questions) {
+      questions.forEach((q: any, index: number) => {
         const qt = Number(q.questionType);
         const userAnswer = answerMap[String(q.id)] ?? '';
+        const maxScore = questionScores[index];
         let isCorrect: number | null = null;
+        let qScore: number | null = null; // 该题得分
 
         if (qt === 0 || qt === 1 || qt === 2) {
           const correct = extractCorrectAnswer(qt, q.answer);
@@ -264,6 +241,7 @@ export default class answer extends Service {
           } else {
             const ok = isObjectiveCorrect(qt, userAnswer, correct, q.questionDetail);
             isCorrect = ok ? 1 : 0;
+            qScore = ok ? maxScore : 0;
             if (ok) {
               correctNum++;
             } else {
@@ -271,15 +249,9 @@ export default class answer extends Service {
             }
           }
         } else {
-          // 简答/填空等主观题：宽松关键词匹配，命中给分，未命中仍待对照
-          const ok = judgeSubjective(userAnswer, q.answer);
-          if (ok === 1) {
-            correctNum++;
-            isCorrect = 1;
-          } else {
-            subjectiveNum++;
-            isCorrect = null;
-          }
+          // 简答/填空等主观题：全部交给 AI 批改（交卷后逐题评分并计入成绩）
+          subjectiveNum++;
+          isCorrect = null;
         }
 
         detail.push({
@@ -290,11 +262,13 @@ export default class answer extends Service {
           correctAnswer: q.answer,
           userAnswer,
           isCorrect,
+          score: qScore,
+          maxScore,
         });
-      }
+      });
 
-      const questionNum = questions.length;
-      const score = correctNum;
+      // 客观题得分合计（整数）；主观题待 AI 批改后由 applyAiGrade 累加
+      const score = detail.reduce((sum, d) => sum + (d.score || 0), 0);
 
       const recordRes: any = await app.mysql.insert('paper_record', {
         user_id: userId,
@@ -316,6 +290,8 @@ export default class answer extends Service {
           question_id: d.questionId,
           user_answer: d.userAnswer,
           is_correct: d.isCorrect,
+          score: d.score,
+          max_score: d.maxScore,
           ctime: getNowFormatDate(),
         });
       }
@@ -334,6 +310,57 @@ export default class answer extends Service {
     }
   }
 
+  // AI 判分落库：按该题满分把 AI 得分折算为整数得分，并重算整卷总分写回 paper_record
+  public async applyAiGrade(
+    recordId: number,
+    questionId: number,
+    aiScore: number,
+  ) {
+    const { app } = this;
+    // 该题满分（submitPaper 时已按整数分配写入）
+    const ar: any = await app.mysql.get('answer_record', {
+      record_id: recordId,
+      question_id: questionId,
+    });
+    const maxScore = Number(ar?.max_score) || 1;
+    // AI 给 0-100 分，折算为本题整数得分
+    const earned = Math.max(0, Math.min(maxScore, Math.round((aiScore / 100) * maxScore)));
+    const passScore = Number((this.config as any)?.aiJudge?.passScore) || 60;
+    const isCorrect = aiScore >= passScore;
+
+    await app.mysql.update(
+      'answer_record',
+      { is_correct: isCorrect ? 1 : 0, score: earned },
+      { where: { record_id: recordId, question_id: questionId } },
+    );
+
+    const rows: any = await app.mysql.query(
+      'SELECT ' +
+        'COALESCE(SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END),0) AS correct_num, ' +
+        'COALESCE(SUM(CASE WHEN is_correct = 0 THEN 1 ELSE 0 END),0) AS wrong_num, ' +
+        'COALESCE(SUM(CASE WHEN is_correct IS NULL THEN 1 ELSE 0 END),0) AS subjective_num, ' +
+        'COALESCE(SUM(score),0) AS total_score ' +
+        'FROM answer_record WHERE record_id = ?',
+      [ recordId ],
+    );
+    const r = rows[0] || {};
+    const correctNum = Number(r.correct_num) || 0;
+    const wrongNum = Number(r.wrong_num) || 0;
+    const subjectiveNum = Number(r.subjective_num) || 0;
+    const totalScore = Math.min(100, Number(r.total_score) || 0);
+    await app.mysql.update(
+      'paper_record',
+      {
+        score: totalScore,
+        correct_num: correctNum,
+        wrong_num: wrongNum,
+        subjective_num: subjectiveNum,
+      },
+      { where: { id: recordId } },
+    );
+    return { correctNum, wrongNum, subjectiveNum, score: totalScore };
+  }
+
   // 我的答题记录（含试卷标题）
   public async getMyPaperRecords(params) {
     const { app } = this;
@@ -345,7 +372,8 @@ export default class answer extends Service {
           'WHERE pr.user_id = ? AND p.is_deleted = 0 ORDER BY pr.id DESC',
         [ userId ],
       );
-      return result;
+      // decimal 列驱动返回字符串，统一转成 number 供前端使用
+      return result.map((r: any) => ({ ...r, score: Number(r.score) || 0 }));
     } catch (err) {
       return null;
     }
@@ -361,7 +389,6 @@ export default class answer extends Service {
           'COALESCE(SUM(correct_num),0) AS correct_num, ' +
           'COALESCE(SUM(wrong_num),0) AS wrong_num, ' +
           'COALESCE(SUM(subjective_num),0) AS subjective_num, ' +
-          'COALESCE(SUM(score),0) AS total_score, ' +
           'COALESCE(ROUND(AVG(score),1),0) AS avg_score ' +
           'FROM paper_record WHERE user_id = ?',
         [ userId ],
@@ -415,7 +442,6 @@ export default class answer extends Service {
         correct_num: correctNum,
         wrong_num: wrongNum,
         subjective_num: Number(r.subjective_num) || 0,
-        total_score: Number(r.total_score) || 0,
         avg_score: Number(r.avg_score) || 0,
         correct_rate: correctRate,
         subjectStats,
@@ -485,37 +511,6 @@ export default class answer extends Service {
       const result = await app.mysql.query(
         'DELETE FROM answer_record WHERE user_id = ? AND is_correct = 0',
         [ userId ],
-      );
-      return result;
-    } catch (err) {
-      return null;
-    }
-  }
-  // 主观题待复核列表（管理员，is_correct 为 null 即待定）
-  public async getSubjectiveReviews() {
-    const { app } = this;
-    try {
-      const result = await app.mysql.query(
-        'SELECT ar.*, u.username, q.question, q.answer AS correct_answer, p.paper_title ' +
-          'FROM answer_record ar ' +
-          'LEFT JOIN user u ON ar.user_id = u.userId ' +
-          'LEFT JOIN questions q ON ar.question_id = q.id ' +
-          'LEFT JOIN examination_paper p ON ar.paper_id = p.paper_id ' +
-          'WHERE ar.is_correct IS NULL AND q.is_deleted = 0 ORDER BY ar.id DESC',
-      );
-      return result;
-    } catch (err) {
-      return null;
-    }
-  }
-  // 人工复核主观题：判对(1)或判错(0)
-  public async reviewSubjective(id: number, correct: boolean) {
-    const { app } = this;
-    try {
-      const result = await app.mysql.update(
-        'answer_record',
-        { is_correct: correct ? 1 : 0 },
-        { where: { id } },
       );
       return result;
     } catch (err) {

@@ -46,9 +46,10 @@ export default class paper extends Service {
           personPaper,
         };
       }
-      // 我的试卷
+      // 我的试卷（参数化查询，避免 SQL 注入）
       const result: any = await app.mysql.query(
-        `select * from examination_paper where author = '${author}' and is_deleted = 0 order by paper_id desc`,
+        'select * from examination_paper where author = ? and is_deleted = 0 order by paper_id desc',
+        [ author ],
       );
 
       return result;
