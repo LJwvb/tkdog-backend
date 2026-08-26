@@ -64,13 +64,29 @@ export default class questions extends Controller {
       ctx.fail('上传失败,请重新上传~');
     }
   }
-  // 编辑题目（管理员，用于按纠错反馈修正题目）
+  // 编辑题目（管理员可改任意题，普通用户只能改自己上传的题）
   public async updateQuestion() {
     const { ctx } = this;
     const { id, question, answer, difficulty, tags } = ctx.request.body;
     if (!id || !question || !answer) {
       ctx.fail('请填写完整信息~');
       return;
+    }
+    // 权限：管理员，或该题上传者本人
+    const isAdmin = ctx.isAdmin();
+    const userId = ctx.currentUserId();
+    if (!isAdmin) {
+      if (!userId) {
+        ctx.fail('请先登录~');
+        return;
+      }
+      const upload: any = await ctx.service.questions.getQuestionUpload(
+        Number(id),
+      );
+      if (!upload || upload.user_id !== userId) {
+        ctx.fail('只能编辑自己上传的题目~');
+        return;
+      }
     }
     const combined = [ question, answer, tags ].filter(Boolean).join(' ');
     const check = await ctx.service.sensitiveWord.check(combined);
@@ -86,6 +102,8 @@ export default class questions extends Controller {
       tags: tags || '',
       updateTime: getNowFormatDate(),
       updateUser: ctx.currentAdminName() || ctx.currentUsername() || '',
+      // 普通用户编辑需重新审核（仅审核通过的题会被置为待审核）
+      needReview: !isAdmin,
     });
     if (result) {
       ctx.success(null, '修改成功~');

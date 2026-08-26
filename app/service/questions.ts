@@ -264,11 +264,18 @@ export default class questions extends Service {
       return null;
     }
   }
-  // 编辑题目（管理员，用于按用户纠错反馈修正题目）
+  // 编辑题目（管理员或本人；本人编辑已审核通过的题需重新审核）
   public async updateQuestion(params) {
     const { app } = this;
-    const { id, ...updateData } = params;
+    const { id, needReview, ...updateData } = params;
     try {
+      if (needReview) {
+        const question: any = await app.mysql.get('questions', { id });
+        // 审核通过(1)或审核不通过(2)的题，编辑后都重新进入审核(0)
+        if (question && Number(question.chkState) !== 0) {
+          updateData.chkState = 0;
+        }
+      }
       const result = await app.mysql.update('questions', updateData, {
         where: { id },
       });
@@ -276,6 +283,12 @@ export default class questions extends Service {
     } catch (err) {
       return null;
     }
+  }
+  // 查询题目上传关系（用于判断是否本人上传）
+  public async getQuestionUpload(questionId: number) {
+    return await this.app.mysql.get('user_upload_question', {
+      question_id: questionId,
+    });
   }
   // 批量导入题目
   public async importQuestions(params) {

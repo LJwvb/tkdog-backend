@@ -214,10 +214,22 @@ export default class comment extends Service {
       return null;
     }
   }
-  // 置顶/取消置顶评论（管理员）
+  // 置顶/取消置顶评论（管理员；同一题目下同时只允许一条置顶）
   public async pinComment(id: number, pinned: boolean) {
     const { app } = this;
     try {
+      if (pinned) {
+        // 找到该评论所属题目，便于清空同题下其它置顶
+        const target: any = await app.mysql.get('comment', { id });
+        if (!target) return null;
+        // 只允许置顶顶层评论（回复类评论置顶后无法排到最前）
+        if (target.parent_id) return null;
+        // 先取消同题下其它评论的置顶，保证只保留这一条
+        await app.mysql.query(
+          'UPDATE comment SET is_pinned = 0 WHERE question_id = ? AND id != ?',
+          [ target.question_id, id ],
+        );
+      }
       const result = await app.mysql.update(
         'comment',
         { is_pinned: pinned ? 1 : 0 },

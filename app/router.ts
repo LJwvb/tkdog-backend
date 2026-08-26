@@ -6,6 +6,7 @@ export default (app: Application) => {
   // 鉴权中间件
   const auth = middleware.auth();
   const adminAuth = middleware.adminAuth();
+  const authOrAdmin = middleware.authOrAdmin();
   // 前缀
   router.prefix('/api');
 
@@ -56,12 +57,19 @@ export default (app: Application) => {
     auth,
     controller.questions.cancelLikeQuestions
   );
-  router.post('/addBrowsesNum', auth, controller.questions.addBrowsesNum);
+  // 浏览数：游客也能浏览题目，浏览数应随访问 +1，不强制登录
+  router.post('/addBrowsesNum', controller.questions.addBrowsesNum);
   router.post('/getPaperQuestions', auth, controller.paper.getPaperQuestions);
   router.post(
     '/updatePaperPurview',
     auth,
     controller.paper.updatePaperPurview
+  );
+  // 编辑自己的试卷题目（公开试卷需重新审核）
+  router.post(
+    '/updatePaperQuestions',
+    auth,
+    controller.paper.updatePaperQuestions
   );
   router.post('/addComment', auth, controller.comment.addComment);
   router.post('/uploadImage', auth, controller.upload.uploadImage);
@@ -120,6 +128,11 @@ export default (app: Application) => {
     controller.admin.getStatistics
   );
   router.post(
+    '/getAdminPendingCounts',
+    adminAuth,
+    controller.admin.getPendingCounts
+  );
+  router.post(
     '/getNoChkQuestions',
     adminAuth,
     controller.admin.getNoChkQuestions
@@ -131,7 +144,7 @@ export default (app: Application) => {
   );
   router.post('/chkQuestions', adminAuth, controller.admin.chkQuestions);
   router.post('/deleteQuestions', adminAuth, controller.admin.deleteQuestions);
-  router.post('/updateQuestion', adminAuth, controller.questions.updateQuestion);
+  router.post('/updateQuestion', authOrAdmin, controller.questions.updateQuestion);
   router.post('/chkPaper', adminAuth, controller.admin.chkPaper);
   router.post('/getNoChkPaper', adminAuth, controller.admin.getNoChkPaper);
   router.post('/getAllChkPaper', adminAuth, controller.admin.getAllChkPaper);

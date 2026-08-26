@@ -109,4 +109,38 @@ export default class paper extends Service {
       return null;
     }
   }
+  // 编辑自己的试卷题目（增删题目；公开试卷需重新审核，私有无需）
+  public async updatePaperQuestions(params) {
+    const { app } = this;
+    const { paperId, ids, owner } = params;
+    try {
+      const paper: any = await app.mysql.get('examination_paper', {
+        paper_id: paperId,
+      });
+      if (!paper || paper.author !== owner) return null;
+      // 重建试卷-题目关联
+      await app.mysql.delete('paper_question', { paper_id: paperId });
+      const idList = String(ids)
+        .split(',')
+        .map((x: string) => x.trim())
+        .filter((x: string) => x !== '');
+      for (let i = 0; i < idList.length; i++) {
+        await app.mysql.insert('paper_question', {
+          paper_id: paperId,
+          question_id: Number(idList[i]),
+          sort_order: i,
+        });
+      }
+      // 公开(1)重新审核；私有(3)/官方(-1)无需审核
+      const chkState = Number(paper.purview) === 1 ? 0 : 1;
+      await app.mysql.update(
+        'examination_paper',
+        { chkState },
+        { where: { paper_id: paperId } },
+      );
+      return { chkState };
+    } catch (err) {
+      return null;
+    }
+  }
 }

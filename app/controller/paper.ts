@@ -101,4 +101,35 @@ export default class paper extends Controller {
       ctx.fail('设置失败，只能修改自己的试卷~');
     }
   }
+  // 编辑自己的试卷题目（增删题目）
+  public async updatePaperQuestions() {
+    const { ctx } = this;
+    const { paperId, ids } = ctx.request.body;
+    if (!paperId || ids == null) {
+      ctx.fail('参数不完整~');
+      return;
+    }
+    const arrayIds = String(ids)
+      .split(',')
+      .map((x: string) => x.trim())
+      .filter((x: string) => x !== '');
+    if (arrayIds.length < 1 || arrayIds.length > 50) {
+      ctx.fail('试卷题目数量需在 1 到 50 道之间~');
+      return;
+    }
+    const result = await ctx.service.paper.updatePaperQuestions({
+      paperId: Number(paperId),
+      ids: arrayIds.join(','),
+      owner: ctx.currentUsername(),
+    });
+    if (result) {
+      const needReview = result.chkState === 0;
+      ctx.success(
+        null,
+        needReview ? '修改成功，公开试卷需重新审核' : '修改成功~',
+      );
+    } else {
+      ctx.fail('修改失败，只能修改自己的试卷~');
+    }
+  }
 }

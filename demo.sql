@@ -1,7 +1,7 @@
 /*M!999999\- enable the sandbox mode */ 
 -- MariaDB dump 10.19  Distrib 10.11.18-MariaDB, for Win64 (AMD64)
 --
--- Host: 127.0.0.1    Database: demo
+-- Host: localhost    Database: demo
 -- ------------------------------------------------------
 -- Server version	10.11.18-MariaDB
 
@@ -47,7 +47,7 @@ CREATE TABLE `admin` (
 LOCK TABLES `admin` WRITE;
 /*!40000 ALTER TABLE `admin` DISABLE KEYS */;
 INSERT INTO `admin` VALUES
-(1,'admin','$2b$10$JMXVAHIzUTbIIRsqmN6hPevlEv8tQpFlEyed8/oeDImP20iurHBEq','2026-08-24 22:55:04');
+(1,'admin','$2b$10$JMXVAHIzUTbIIRsqmN6hPevlEv8tQpFlEyed8/oeDImP20iurHBEq','2026-08-26 22:39:58');
 /*!40000 ALTER TABLE `admin` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -352,7 +352,7 @@ CREATE TABLE `checkin` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_user_date` (`user_id`,`checkin_date`),
   KEY `idx_checkin_user` (`user_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -367,7 +367,8 @@ INSERT INTO `checkin` VALUES
 (4,4,'2026-08-16','2026-08-16 00:36:08'),
 (5,2,'2026-08-16','2026-08-16 17:13:56'),
 (6,4,'2026-08-24','2026-08-24 23:10:42'),
-(7,4,'2026-08-25','2026-08-25 00:17:35');
+(7,4,'2026-08-25','2026-08-25 00:17:35'),
+(8,4,'2026-08-26','2026-08-26 21:57:10');
 /*!40000 ALTER TABLE `checkin` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -401,7 +402,7 @@ LOCK TABLES `comment` WRITE;
 /*!40000 ALTER TABLE `comment` DISABLE KEYS */;
 INSERT INTO `comment` VALUES
 (126,4,'我去饿v','2026-08-25 00:27:24',678,NULL,1,0,0,'[\"/public/uploads/1787588838162_qwrf39.jpg\"]'),
-(127,4,'二万人','2026-08-25 00:28:09',678,126,1,0,0,'[\"/public/uploads/1787588887302_yfwzmr.jpg\"]');
+(127,4,'二万人','2026-08-25 00:28:09',678,126,1,1,0,'[\"/public/uploads/1787588887302_yfwzmr.jpg\"]');
 /*!40000 ALTER TABLE `comment` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -449,7 +450,7 @@ CREATE TABLE `examination_paper` (
   `chkState` int(2) NOT NULL COMMENT '审核状态',
   `is_deleted` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`paper_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=68 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=69 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -472,14 +473,15 @@ INSERT INTO `examination_paper` VALUES
 ('admin','2026-08-16 00:27:35',57,'随机练习-1786811255858','',3,1,0),
 ('admin','2026-08-16 00:28:12',58,'随机练习-1786811292541','',3,1,0),
 ('请问','2026-08-16 00:31:35',59,'随机练习-1786811495246','',1,1,0),
-('请问','2026-08-16 00:41:15',60,'随机练习-1786812075266','',1,1,0),
+('请问','2026-08-16 00:41:15',60,'随机练习-1786812075266','',1,0,0),
 ('请问','2026-08-16 01:05:58',61,'随机练习-1786813558708','',3,1,0),
 ('请问','2026-08-16 01:08:58',62,'错题重练-1786813738734','',3,1,0),
 ('小米','2026-08-16 17:44:12',63,'是否','',1,1,0),
 ('请问','2026-08-24 21:39:05',64,'test','',3,1,0),
 ('请问','2026-08-24 23:07:12',65,'随机练习-1787584032489','',3,1,0),
-('请问','2026-08-24 23:47:16',66,'个人练习生','你干嘛,厉不厉害',3,1,0),
-('请问','2026-08-24 23:54:09',67,'错题重练-1787586849674','',3,1,0);
+('请问','2026-08-24 23:47:16',66,'个人练习生','你干嘛,厉不厉害',1,1,0),
+('请问','2026-08-24 23:54:09',67,'错题重练-1787586849674','',3,1,0),
+('请问','2026-08-26 22:10:27',68,'错题重练-1787753427234','',3,1,0);
 /*!40000 ALTER TABLE `examination_paper` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -502,7 +504,7 @@ CREATE TABLE `notification` (
   `comment_id` int(11) DEFAULT NULL COMMENT '关联评论ID',
   PRIMARY KEY (`id`),
   KEY `idx_notification_user` (`user_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=23 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -516,8 +518,10 @@ INSERT INTO `notification` VALUES
 (16,4,'paper_review','试卷审核通过','你创建的试卷「随机练习-1786812075266」审核通过',1,'2026-08-16 00:41:35',NULL,NULL),
 (17,4,'feedback_resolved','纠错反馈已处理','你提交的题目纠错已处理',1,'2026-08-16 00:56:42',NULL,NULL),
 (18,2,'paper_review','试卷审核通过','你创建的试卷「是否」审核通过',1,'2026-08-16 17:54:49',NULL,NULL),
-(19,2,'comment','收到新评论','你的题目「【Promise】下面代码的输出是什么？」收到一条新评论',0,'2026-08-16 19:44:36',NULL,NULL),
-(20,4,'question_review','题目审核通过','你上传的题目「你好啊」审核通过，审核建议：牛逼',1,'2026-08-24 23:56:59',NULL,NULL);
+(19,2,'comment','收到新评论','你的题目「【Promise】下面代码的输出是什么？」收到一条新评论',1,'2026-08-16 19:44:36',NULL,NULL),
+(20,4,'question_review','题目审核通过','你上传的题目「你好啊」审核通过，审核建议：牛逼',1,'2026-08-24 23:56:59',NULL,NULL),
+(21,2,'question_review','题目审核通过','你上传的题目「1」审核通过',1,'2026-08-26 22:21:13',NULL,NULL),
+(22,4,'paper_review','试卷审核通过','你创建的试卷「个人练习生」审核通过',0,'2026-08-26 22:40:11',NULL,NULL);
 /*!40000 ALTER TABLE `notification` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -642,10 +646,6 @@ INSERT INTO `paper_question` VALUES
 (59,623,1),
 (60,569,2),
 (60,571,0),
-(60,575,3),
-(60,578,5),
-(60,582,6),
-(60,609,4),
 (60,615,1),
 (61,563,1),
 (61,568,0),
@@ -700,45 +700,13 @@ INSERT INTO `paper_question` VALUES
 (65,661,6),
 (65,667,9),
 (65,669,7),
-(66,565,11),
-(66,567,8),
-(66,572,19),
-(66,573,18),
-(66,574,22),
-(66,575,25),
-(66,576,27),
-(66,577,0),
-(66,579,30),
-(66,582,28),
-(66,585,32),
-(66,588,5),
-(66,590,3),
-(66,592,38),
-(66,593,6),
-(66,596,37),
-(66,598,10),
-(66,601,16),
-(66,604,2),
-(66,605,17),
-(66,614,35),
-(66,616,31),
-(66,619,7),
-(66,627,12),
-(66,630,14),
-(66,633,15),
-(66,636,13),
-(66,645,9),
-(66,646,23),
-(66,647,21),
-(66,648,20),
-(66,649,24),
-(66,653,26),
-(66,657,34),
-(66,660,29),
-(66,664,33),
-(66,666,36),
-(66,669,1),
-(66,670,4),
+(66,562,3),
+(66,578,4),
+(66,579,6),
+(66,585,5),
+(66,592,2),
+(66,596,1),
+(66,666,0),
 (67,562,41),
 (67,565,27),
 (67,566,40),
@@ -788,7 +756,57 @@ INSERT INTO `paper_question` VALUES
 (67,666,2),
 (67,667,43),
 (67,669,37),
-(67,670,34);
+(67,670,34),
+(68,562,41),
+(68,565,27),
+(68,566,40),
+(68,567,30),
+(68,569,49),
+(68,572,19),
+(68,573,20),
+(68,574,16),
+(68,575,13),
+(68,576,11),
+(68,577,38),
+(68,579,8),
+(68,582,10),
+(68,585,6),
+(68,586,48),
+(68,587,39),
+(68,588,33),
+(68,590,35),
+(68,592,0),
+(68,593,32),
+(68,596,1),
+(68,598,28),
+(68,601,22),
+(68,604,36),
+(68,605,21),
+(68,613,45),
+(68,614,3),
+(68,615,47),
+(68,616,7),
+(68,619,31),
+(68,623,42),
+(68,627,26),
+(68,630,24),
+(68,631,46),
+(68,633,23),
+(68,636,25),
+(68,645,29),
+(68,646,15),
+(68,647,17),
+(68,648,18),
+(68,649,14),
+(68,653,12),
+(68,657,4),
+(68,660,9),
+(68,661,44),
+(68,664,5),
+(68,666,2),
+(68,667,43),
+(68,669,37),
+(68,670,34);
 /*!40000 ALTER TABLE `paper_question` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -896,6 +914,7 @@ CREATE TABLE `questions` (
   `question` varchar(768) DEFAULT NULL,
   `questionDetail` varchar(765) DEFAULT NULL,
   `likes_num` int(11) DEFAULT NULL,
+  `favorite_num` int(11) DEFAULT 0,
   `answer` text DEFAULT NULL,
   `tags` varchar(768) DEFAULT NULL,
   `chkState` tinyint(1) DEFAULT NULL,
@@ -906,7 +925,7 @@ CREATE TABLE `questions` (
   `updateTime` datetime DEFAULT NULL COMMENT '修改时间',
   `updateUser` varchar(255) DEFAULT NULL COMMENT '修改人',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=679 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=680 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -916,123 +935,124 @@ CREATE TABLE `questions` (
 LOCK TABLES `questions` WRITE;
 /*!40000 ALTER TABLE `questions` DISABLE KEYS */;
 INSERT INTO `questions` VALUES
-(562,0,0,5,'0','0','以下哪项不是 JavaScript 的基本数据类型？','[{\"code\":\"A\",\"value\":\"Number\"},{\"code\":\"B\",\"value\":\"String\"},{\"code\":\"C\",\"value\":\"Integer\"},{\"code\":\"D\",\"value\":\"Boolean\"}]',1,'正确选项：C','JavaScript,基础',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(563,0,0,2,'0','1','下列哪个方法可以向数组末尾添加一个元素？','[{\"code\":\"A\",\"value\":\"push\"},{\"code\":\"B\",\"value\":\"pop\"},{\"code\":\"C\",\"value\":\"shift\"},{\"code\":\"D\",\"value\":\"unshift\"}]',0,'正确选项：A','JavaScript,数组',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(564,1,0,2,'0','0','以下哪个 CSS 属性用于设置文字颜色？','[{\"code\":\"A\",\"value\":\"color\"},{\"code\":\"B\",\"value\":\"font-color\"},{\"code\":\"C\",\"value\":\"text-color\"},{\"code\":\"D\",\"value\":\"background-color\"}]',0,'正确选项：A','CSS,基础',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(565,1,0,1,'0','1','下列哪个选择器的优先级最高？','[{\"code\":\"A\",\"value\":\"#id\"},{\"code\":\"B\",\"value\":\".class\"},{\"code\":\"C\",\"value\":\"element\"},{\"code\":\"D\",\"value\":\"*\"}]',0,'正确选项：A','CSS,选择器',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(566,2,0,0,'0','0','HTML 中用于插入图片的标签是？','[{\"code\":\"A\",\"value\":\"<img>\"},{\"code\":\"B\",\"value\":\"<image>\"},{\"code\":\"C\",\"value\":\"<pic>\"},{\"code\":\"D\",\"value\":\"<figure>\"}]',0,'正确选项：A','HTML,基础',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(567,5,0,0,'0','1','Vue 中用于数据双向绑定的指令是？','[{\"code\":\"A\",\"value\":\"v-model\"},{\"code\":\"B\",\"value\":\"v-bind\"},{\"code\":\"C\",\"value\":\"v-on\"},{\"code\":\"D\",\"value\":\"v-if\"}]',0,'正确选项：A','Vue,指令',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(568,4,0,0,'0','1','在 React 函数组件中管理本地状态的 Hook 是？','[{\"code\":\"A\",\"value\":\"useState\"},{\"code\":\"B\",\"value\":\"useEffect\"},{\"code\":\"C\",\"value\":\"useContext\"},{\"code\":\"D\",\"value\":\"useMemo\"}]',0,'正确选项：A','React,Hook',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(569,8,0,1,'0','1','TypeScript 中定义接口使用的关键字是？','[{\"code\":\"A\",\"value\":\"interface\"},{\"code\":\"B\",\"value\":\"type\"},{\"code\":\"C\",\"value\":\"class\"},{\"code\":\"D\",\"value\":\"enum\"}]',0,'正确选项：A','TypeScript,基础',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(570,9,0,1,'0','0','将暂存区内容提交到本地仓库的 Git 命令是？','[{\"code\":\"A\",\"value\":\"git commit\"},{\"code\":\"B\",\"value\":\"git add\"},{\"code\":\"C\",\"value\":\"git push\"},{\"code\":\"D\",\"value\":\"git clone\"}]',0,'正确选项：A','Git,基础',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(571,10,0,0,'0','0','HTTP 中表示请求成功的状态码是？','[{\"code\":\"A\",\"value\":\"200\"},{\"code\":\"B\",\"value\":\"301\"},{\"code\":\"C\",\"value\":\"404\"},{\"code\":\"D\",\"value\":\"500\"}]',0,'正确选项：A','HTTP,状态码',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(572,0,0,3,'1','1','以下哪些是 ES6 新增的特性？','[{\"code\":\"A\",\"value\":\"let/const\"},{\"code\":\"B\",\"value\":\"箭头函数\"},{\"code\":\"C\",\"value\":\"模板字符串\"},{\"code\":\"D\",\"value\":\"Promise\"}]',0,'正确选项：ABCD','JavaScript,ES6',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(573,5,0,1,'1','1','以下哪些属于 Vue 的生命周期钩子？','[{\"code\":\"A\",\"value\":\"mounted\"},{\"code\":\"B\",\"value\":\"created\"},{\"code\":\"C\",\"value\":\"beforeUpdate\"},{\"code\":\"D\",\"value\":\"beforeDestroy\"}]',0,'正确选项：ABCD','Vue,生命周期',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(574,10,0,1,'1','1','以下哪些是常见的 HTTP 请求方法？','[{\"code\":\"A\",\"value\":\"GET\"},{\"code\":\"B\",\"value\":\"POST\"},{\"code\":\"C\",\"value\":\"PUT\"},{\"code\":\"D\",\"value\":\"DELETE\"}]',0,'正确选项：ABCD','HTTP,方法',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(575,9,0,0,'1','1','以下哪些是 Git 的常用命令？','[{\"code\":\"A\",\"value\":\"clone\"},{\"code\":\"B\",\"value\":\"branch\"},{\"code\":\"C\",\"value\":\"merge\"},{\"code\":\"D\",\"value\":\"status\"}]',0,'正确选项：ABCD','Git,命令',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(576,11,0,0,'1','1','以下哪些可以用作浏览器的本地存储？','[{\"code\":\"A\",\"value\":\"localStorage\"},{\"code\":\"B\",\"value\":\"sessionStorage\"},{\"code\":\"C\",\"value\":\"Cookie\"},{\"code\":\"D\",\"value\":\"IndexedDB\"}]',0,'正确选项：ABCD','浏览器,存储',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(577,8,0,1,'1','2','以下哪些是 TypeScript 支持的类型标注？','[{\"code\":\"A\",\"value\":\"string\"},{\"code\":\"B\",\"value\":\"number\"},{\"code\":\"C\",\"value\":\"boolean\"},{\"code\":\"D\",\"value\":\"any\"}]',0,'正确选项：ABCD','TypeScript,类型',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(578,0,0,2,'2','0','JavaScript 中 === 会进行严格类型比较。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','JavaScript,基础',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(579,0,0,1,'2','1','JavaScript 中 == 和 === 的行为完全一致。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'错误','JavaScript,基础',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(580,1,0,0,'2','0','CSS 中 id 选择器的优先级高于 class 选择器。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','CSS,选择器',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(581,2,0,0,'2','0','HTML 中 div 是块级元素。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','HTML,基础',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(582,5,0,0,'2','1','Vue 中 v-if 和 v-show 都会销毁并重建 DOM 元素。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'错误','Vue,指令',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(583,10,0,0,'2','0','HTTPS 是在 HTTP 基础上加入了 TLS/SSL 加密。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','HTTP,安全',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(584,9,0,0,'2','0','git pull 等价于 git fetch 加 git merge。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','Git,命令',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(585,6,0,0,'2','1','Node.js 采用单线程事件驱动模型。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','Node,基础',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(586,0,0,2,'3','1','请简述 var、let、const 的区别。','',0,'var 存在变量提升且可重复声明；let 具有块级作用域且不可重复声明；const 声明常量，值不可重新赋值，同样具有块级作用域。','JavaScript,基础',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(587,1,0,0,'3','1','请简述标准盒模型由哪些部分组成。','',0,'标准盒模型由 content（内容）、padding（内边距）、border（边框）、margin（外边距）四部分组成。','CSS,盒模型',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(588,5,0,0,'3','2','请列举 Vue 组件间通信的常用方式。','',0,'常用方式包括：父传子用 props、子传父用 emit、跨层级用 provide/inject、全局状态用 Vuex 或 Pinia、以及事件总线或 ref 访问组件实例。','Vue,通信',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(589,10,0,1,'3','1','请简述 GET 和 POST 请求的主要区别。','',0,'GET 参数拼接在 URL 中、可被缓存且通常幂等，适合查询；POST 参数放在请求体中、适合提交数据，一般不幂等且相对更安全。','HTTP,方法',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(590,4,0,0,'3','2','请简述受控组件与非受控组件的区别。','',0,'受控组件的表单值由 React state 控制并通过 onChange 更新；非受控组件不维护 state，直接通过 ref 读取 DOM 中的值。','React,表单',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(591,9,0,0,'3','1','请简述 git merge 与 git rebase 的区别。','',0,'merge 会保留分支历史并产生一个合并提交；rebase 会把当前分支的提交重放到目标分支之上，使历史更线性整洁。','Git,分支',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(592,11,0,1,'3','1','请简述从输入 URL 到页面显示经历了哪些主要步骤。','',0,'主要包括：DNS 解析域名、建立 TCP 连接、发送 HTTP 请求、服务器返回响应、浏览器解析 HTML/CSS/JS 并渲染页面。','浏览器,原理',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(593,6,0,0,'3','2','请简述 Node.js 事件循环的作用。','',0,'事件循环用于调度异步回调和非阻塞 IO，通过不断循环处理宏任务与微任务，保证单线程下的高并发能力。','Node,事件循环',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
-(594,3,0,0,'0','0','Angular 中实现双向数据绑定的语法是？','[{\"code\":\"A\",\"value\":\"[(ngModel)]\"},{\"code\":\"B\",\"value\":\"(ngModel)\"},{\"code\":\"C\",\"value\":\"[ngModel]\"},{\"code\":\"D\",\"value\":\"#ngModel\"}]',0,'正确选项：A','Angular,指令',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(595,3,0,0,'2','0','Angular 中 *ngIf 指令用于根据条件渲染元素。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','Angular,指令',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(596,3,0,0,'3','1','请简述 Angular 中组件、模块与服务的关系。','',0,'组件负责视图与交互；模块（NgModule）用于组织和声明组件、指令、服务等；服务（@Injectable）封装可复用的业务逻辑，通过依赖注入提供给组件使用。','Angular,基础',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(597,7,0,0,'0','0','Webpack 中用于处理 CSS 文件的 loader 是？','[{\"code\":\"A\",\"value\":\"css-loader\"},{\"code\":\"B\",\"value\":\"babel-loader\"},{\"code\":\"C\",\"value\":\"file-loader\"},{\"code\":\"D\",\"value\":\"url-loader\"}]',0,'正确选项：A','Webpack,loader',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(598,7,0,0,'0','1','Webpack 配置中用于指定入口文件的字段是？','[{\"code\":\"A\",\"value\":\"entry\"},{\"code\":\"B\",\"value\":\"output\"},{\"code\":\"C\",\"value\":\"module\"},{\"code\":\"D\",\"value\":\"plugins\"}]',0,'正确选项：A','Webpack,配置',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(599,7,0,0,'2','0','Webpack 的 mode 支持 development 和 production 两种模式。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','Webpack,基础',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(600,7,0,0,'3','1','请简述 Webpack 中 loader 与 plugin 的区别。','',0,'loader 用于转换单个模块的源码（如编译 CSS、JS），在打包过程中对文件进行预处理；plugin 作用于整个构建生命周期，通过钩子扩展打包、优化、产物处理等能力。','Webpack,基础',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(601,7,0,0,'1','1','以下哪些是常见的前端构建工具？','[{\"code\":\"A\",\"value\":\"Webpack\"},{\"code\":\"B\",\"value\":\"Vite\"},{\"code\":\"C\",\"value\":\"Rollup\"},{\"code\":\"D\",\"value\":\"Parcel\"}]',0,'正确选项：ABCD','Webpack,构建工具',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(602,11,0,0,'0','0','以下哪个不是浏览器渲染引擎？','[{\"code\":\"A\",\"value\":\"Blink\"},{\"code\":\"B\",\"value\":\"Gecko\"},{\"code\":\"C\",\"value\":\"WebKit\"},{\"code\":\"D\",\"value\":\"Node.js\"}]',0,'正确选项：D','浏览器,渲染引擎',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(603,11,0,0,'2','0','localStorage 中的数据在浏览器关闭后仍会保留。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','浏览器,存储',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(604,11,0,0,'3','2','请简述浏览器重排（reflow）与重绘（repaint）的区别。','',0,'重排是元素的几何属性（尺寸、位置）改变导致重新计算布局，开销较大；重绘是外观样式（颜色、背景）改变但不影响布局，只需重新绘制像素，开销较小。','浏览器,性能',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(605,11,0,0,'1','1','浏览器同源策略由哪些部分构成？','[{\"code\":\"A\",\"value\":\"协议\"},{\"code\":\"B\",\"value\":\"域名\"},{\"code\":\"C\",\"value\":\"端口\"},{\"code\":\"D\",\"value\":\"路径\"}]',0,'正确选项：ABC','浏览器,同源策略',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(606,10,0,0,'0','1','HTTP 响应头中用于缓存控制的是？','[{\"code\":\"A\",\"value\":\"Cache-Control\"},{\"code\":\"B\",\"value\":\"Content-Type\"},{\"code\":\"C\",\"value\":\"Accept\"},{\"code\":\"D\",\"value\":\"Cookie\"}]',0,'正确选项：A','HTTP,缓存',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(607,10,0,0,'2','0','状态码 404 表示请求的资源未找到。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','HTTP,状态码',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(608,10,0,1,'3','1','请简述 HTTP/2 相比 HTTP/1.1 的主要改进。','',0,'HTTP/2 支持二进制分帧、头部压缩（HPACK）、多路复用、服务器推送，减少了队头阻塞并提升传输效率。','HTTP,协议',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(609,10,0,0,'1','0','以下哪些是 HTTP 常见的请求头？','[{\"code\":\"A\",\"value\":\"User-Agent\"},{\"code\":\"B\",\"value\":\"Content-Type\"},{\"code\":\"C\",\"value\":\"Accept\"},{\"code\":\"D\",\"value\":\"Authorization\"}]',0,'正确选项：ABCD','HTTP,请求头',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(610,6,0,0,'0','0','Node.js 中用于读写文件的模块是？','[{\"code\":\"A\",\"value\":\"fs\"},{\"code\":\"B\",\"value\":\"http\"},{\"code\":\"C\",\"value\":\"path\"},{\"code\":\"D\",\"value\":\"os\"}]',0,'正确选项：A','Node,fs',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(611,6,0,0,'2','0','Node.js 使用 CommonJS 模块规范，require 用于引入模块。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','Node,模块',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(612,6,0,0,'3','1','请简述 Node.js 中 require 查找模块的规则。','',0,'require 会先判断是否为内置模块或相对/绝对路径，再依次在 node_modules 目录中逐级向上查找模块的 package.json main 字段或 index 文件。','Node,模块',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(613,1,0,1,'0','0','下列哪个属性可以让元素采用弹性布局？','[{\"code\":\"A\",\"value\":\"display:flex\"},{\"code\":\"B\",\"value\":\"display:block\"},{\"code\":\"C\",\"value\":\"position:flex\"},{\"code\":\"D\",\"value\":\"float:flex\"}]',0,'正确选项：A','CSS,布局',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(614,1,0,0,'2','1','CSS 中 em 是相对单位，1em 相对于父元素的 font-size。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','CSS,单位',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(615,0,0,1,'0','0','判断一个值是否为 NaN 应使用哪个函数？','[{\"code\":\"A\",\"value\":\"isNaN\"},{\"code\":\"B\",\"value\":\"isNull\"},{\"code\":\"C\",\"value\":\"isUndefined\"},{\"code\":\"D\",\"value\":\"isString\"}]',0,'正确选项：A','JavaScript,基础',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(616,0,0,1,'2','1','JavaScript 中 typeof null 的结果是 object。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','JavaScript,基础',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(617,2,0,0,'0','0','HTML5 中用于定义页眉区域的语义化标签是？','[{\"code\":\"A\",\"value\":\"<header>\"},{\"code\":\"B\",\"value\":\"<head>\"},{\"code\":\"C\",\"value\":\"<top>\"},{\"code\":\"D\",\"value\":\"<title>\"}]',0,'正确选项：A','HTML,语义化',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(618,2,0,0,'2','0','input 的 type=email 在表单提交时会做基础的邮箱格式校验。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','HTML,表单',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(619,5,0,0,'0','1','Vue 3 中用于创建响应式对象的 API 是？','[{\"code\":\"A\",\"value\":\"reactive\"},{\"code\":\"B\",\"value\":\"computed\"},{\"code\":\"C\",\"value\":\"watch\"},{\"code\":\"D\",\"value\":\"nextTick\"}]',0,'正确选项：A','Vue,响应式',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(620,5,0,0,'2','0','Vue 3 使用 Proxy 实现响应式系统。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','Vue,响应式',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(621,4,0,0,'0','0','React 中父组件向子组件传递数据通常使用？','[{\"code\":\"A\",\"value\":\"props\"},{\"code\":\"B\",\"value\":\"state\"},{\"code\":\"C\",\"value\":\"refs\"},{\"code\":\"D\",\"value\":\"context\"}]',0,'正确选项：A','React,props',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(622,4,0,0,'2','0','React 列表渲染中 key 属性用于帮助 diff 算法识别元素变化。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','React,key',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(623,8,0,0,'0','1','TypeScript 中定义一个可选属性的写法是？','[{\"code\":\"A\",\"value\":\"name?: string\"},{\"code\":\"B\",\"value\":\"name!: string\"},{\"code\":\"C\",\"value\":\"name = string\"},{\"code\":\"D\",\"value\":\"name string\"}]',0,'正确选项：A','TypeScript,类型',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(624,8,0,0,'2','0','TypeScript 最终会被编译成 JavaScript 才能运行。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','TypeScript,基础',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(625,9,0,0,'0','0','查看 Git 提交历史的命令是？','[{\"code\":\"A\",\"value\":\"git log\"},{\"code\":\"B\",\"value\":\"git status\"},{\"code\":\"C\",\"value\":\"git diff\"},{\"code\":\"D\",\"value\":\"git branch\"}]',0,'正确选项：A','Git,命令',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(626,9,0,0,'2','0','git branch 命令可以查看或创建分支。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','Git,分支',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
-(627,0,0,0,'0','1','数组方法中，用于删除并返回最后一个元素的是？','[{\"code\":\"A\",\"value\":\"pop\"},{\"code\":\"B\",\"value\":\"push\"},{\"code\":\"C\",\"value\":\"shift\"},{\"code\":\"D\",\"value\":\"unshift\"}]',0,'正确选项：A','JavaScript,数组',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(628,0,0,0,'0','1','以下哪个方法可以把 JSON 字符串解析为 JavaScript 对象？','[{\"code\":\"A\",\"value\":\"JSON.parse\"},{\"code\":\"B\",\"value\":\"JSON.stringify\"},{\"code\":\"C\",\"value\":\"eval\"},{\"code\":\"D\",\"value\":\"parseInt\"}]',0,'正确选项：A','JavaScript,JSON',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(629,0,0,0,'0','0','JavaScript 中表示「未定义」的值是？','[{\"code\":\"A\",\"value\":\"null\"},{\"code\":\"B\",\"value\":\"undefined\"},{\"code\":\"C\",\"value\":\"NaN\"},{\"code\":\"D\",\"value\":\"void\"}]',0,'正确选项：B','JavaScript,基础',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(630,1,0,0,'0','1','使元素相对于自身原始位置进行偏移的定位方式是？','[{\"code\":\"A\",\"value\":\"relative\"},{\"code\":\"B\",\"value\":\"absolute\"},{\"code\":\"C\",\"value\":\"fixed\"},{\"code\":\"D\",\"value\":\"static\"}]',0,'正确选项：A','CSS,定位',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(631,1,0,0,'0','0','实现块级元素水平居中的常见写法是？','[{\"code\":\"A\",\"value\":\"margin: 0 auto\"},{\"code\":\"B\",\"value\":\"padding: 0 auto\"},{\"code\":\"C\",\"value\":\"margin: auto 0\"},{\"code\":\"D\",\"value\":\"text-align: center\"}]',0,'正确选项：A','CSS,布局',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(632,2,0,0,'0','0','HTML 中用于定义无序列表的标签是？','[{\"code\":\"A\",\"value\":\"<ul>\"},{\"code\":\"B\",\"value\":\"<ol>\"},{\"code\":\"C\",\"value\":\"<dl>\"},{\"code\":\"D\",\"value\":\"<li>\"}]',0,'正确选项：A','HTML,标签',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(633,2,0,0,'0','1','HTML 中用于在 head 内引入外部 CSS 文件的标签是？','[{\"code\":\"A\",\"value\":\"<link>\"},{\"code\":\"B\",\"value\":\"<script>\"},{\"code\":\"C\",\"value\":\"<style>\"},{\"code\":\"D\",\"value\":\"<import>\"}]',0,'正确选项：A','HTML,标签',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(634,5,0,0,'0','0','Vue 中用于条件渲染的指令是？','[{\"code\":\"A\",\"value\":\"v-if\"},{\"code\":\"B\",\"value\":\"v-for\"},{\"code\":\"C\",\"value\":\"v-model\"},{\"code\":\"D\",\"value\":\"v-bind\"}]',0,'正确选项：A','Vue,指令',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(635,5,0,0,'0','1','Vue 中用于定义计算属性的配置项是？','[{\"code\":\"A\",\"value\":\"computed\"},{\"code\":\"B\",\"value\":\"watch\"},{\"code\":\"C\",\"value\":\"methods\"},{\"code\":\"D\",\"value\":\"props\"}]',0,'正确选项：A','Vue,选项',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(636,4,0,0,'0','1','React 函数组件中用于管理状态的是？','[{\"code\":\"A\",\"value\":\"useState\"},{\"code\":\"B\",\"value\":\"useEffect\"},{\"code\":\"C\",\"value\":\"useRef\"},{\"code\":\"D\",\"value\":\"useContext\"}]',0,'正确选项：A','React,Hooks',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(637,4,0,0,'0','0','React 中用于描述 UI 结构的语法是？','[{\"code\":\"A\",\"value\":\"JSX\"},{\"code\":\"B\",\"value\":\"XML\"},{\"code\":\"C\",\"value\":\"HTML\"},{\"code\":\"D\",\"value\":\"TSX\"}]',0,'正确选项：A','React,JSX',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(638,6,0,0,'0','0','Node.js 中用于创建 HTTP 服务器的模块是？','[{\"code\":\"A\",\"value\":\"http\"},{\"code\":\"B\",\"value\":\"fs\"},{\"code\":\"C\",\"value\":\"net\"},{\"code\":\"D\",\"value\":\"dns\"}]',0,'正确选项：A','Node,模块',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(639,9,0,0,'0','0','Git 中创建并切换到新分支的命令是？','[{\"code\":\"A\",\"value\":\"git checkout -b\"},{\"code\":\"B\",\"value\":\"git branch\"},{\"code\":\"C\",\"value\":\"git switch -d\"},{\"code\":\"D\",\"value\":\"git new\"}]',0,'正确选项：A','Git,分支',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(640,9,0,0,'0','1','Git 中用于查看提交历史的命令是？','[{\"code\":\"A\",\"value\":\"git log\"},{\"code\":\"B\",\"value\":\"git status\"},{\"code\":\"C\",\"value\":\"git diff\"},{\"code\":\"D\",\"value\":\"git show\"}]',0,'正确选项：A','Git,命令',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(641,10,0,0,'0','0','HTTP 状态码 500 表示？','[{\"code\":\"A\",\"value\":\"服务器内部错误\"},{\"code\":\"B\",\"value\":\"资源未找到\"},{\"code\":\"C\",\"value\":\"请求成功\"},{\"code\":\"D\",\"value\":\"重定向\"}]',0,'正确选项：A','HTTP,状态码',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(642,10,0,0,'0','1','HTTP 响应头中用于协商缓存的是？','[{\"code\":\"A\",\"value\":\"ETag\"},{\"code\":\"B\",\"value\":\"Cookie\"},{\"code\":\"C\",\"value\":\"Host\"},{\"code\":\"D\",\"value\":\"Content-Type\"}]',0,'正确选项：A','HTTP,缓存',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(643,11,0,0,'0','0','浏览器中主要负责解析 HTML 与 CSS 的是？','[{\"code\":\"A\",\"value\":\"渲染引擎\"},{\"code\":\"B\",\"value\":\"JS 引擎\"},{\"code\":\"C\",\"value\":\"网络模块\"},{\"code\":\"D\",\"value\":\"存储模块\"}]',0,'正确选项：A','浏览器,渲染',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(644,8,0,0,'0','1','TypeScript 中用于把 .ts 编译为 .js 的命令是？','[{\"code\":\"A\",\"value\":\"tsc\"},{\"code\":\"B\",\"value\":\"ts-node\"},{\"code\":\"C\",\"value\":\"node\"},{\"code\":\"D\",\"value\":\"npm run\"}]',0,'正确选项：A','TypeScript,编译',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(645,7,0,0,'0','1','Webpack 配置中用于指定入口文件的字段是？','[{\"code\":\"A\",\"value\":\"entry\"},{\"code\":\"B\",\"value\":\"output\"},{\"code\":\"C\",\"value\":\"module\"},{\"code\":\"D\",\"value\":\"plugins\"}]',0,'正确选项：A','Webpack,配置',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(646,0,0,0,'1','1','以下哪些是 JavaScript 数组的常用方法？','[{\"code\":\"A\",\"value\":\"map\"},{\"code\":\"B\",\"value\":\"filter\"},{\"code\":\"C\",\"value\":\"reduce\"},{\"code\":\"D\",\"value\":\"concat\"}]',0,'正确选项：ABCD','JavaScript,数组',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(647,0,0,0,'1','1','以下哪些属于 JavaScript 的引用类型？','[{\"code\":\"A\",\"value\":\"Object\"},{\"code\":\"B\",\"value\":\"Array\"},{\"code\":\"C\",\"value\":\"Function\"},{\"code\":\"D\",\"value\":\"Number\"}]',0,'正确选项：ABC','JavaScript,类型',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(648,5,0,0,'1','1','以下哪些是 Vue 的常用指令？','[{\"code\":\"A\",\"value\":\"v-if\"},{\"code\":\"B\",\"value\":\"v-for\"},{\"code\":\"C\",\"value\":\"v-model\"},{\"code\":\"D\",\"value\":\"v-bind\"}]',0,'正确选项：ABCD','Vue,指令',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(649,5,0,0,'1','1','以下哪些属于 Vue Router 的常用组成？','[{\"code\":\"A\",\"value\":\"router-link\"},{\"code\":\"B\",\"value\":\"router-view\"},{\"code\":\"C\",\"value\":\"$router.push\"},{\"code\":\"D\",\"value\":\"$route.query\"}]',0,'正确选项：ABCD','Vue,路由',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(650,10,0,0,'1','0','以下哪些是 HTTP 3xx 重定向状态码？','[{\"code\":\"A\",\"value\":\"301\"},{\"code\":\"B\",\"value\":\"302\"},{\"code\":\"C\",\"value\":\"304\"},{\"code\":\"D\",\"value\":\"404\"}]',0,'正确选项：ABC','HTTP,状态码',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(651,9,0,0,'1','1','以下哪些是 Git 的常用命令？','[{\"code\":\"A\",\"value\":\"git add\"},{\"code\":\"B\",\"value\":\"git commit\"},{\"code\":\"C\",\"value\":\"git push\"},{\"code\":\"D\",\"value\":\"git pull\"}]',0,'正确选项：ABCD','Git,命令',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(652,11,0,0,'1','0','以下哪些属于浏览器提供的 Web 存储？','[{\"code\":\"A\",\"value\":\"localStorage\"},{\"code\":\"B\",\"value\":\"sessionStorage\"},{\"code\":\"C\",\"value\":\"Cookie\"},{\"code\":\"D\",\"value\":\"IndexedDB\"}]',0,'正确选项：ABCD','浏览器,存储',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(653,8,0,0,'1','1','以下哪些是 TypeScript 的基础类型？','[{\"code\":\"A\",\"value\":\"string\"},{\"code\":\"B\",\"value\":\"number\"},{\"code\":\"C\",\"value\":\"boolean\"},{\"code\":\"D\",\"value\":\"any\"}]',0,'正确选项：ABCD','TypeScript,类型',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(654,0,0,0,'2','0','JavaScript 中 const 声明的变量不可以重新赋值。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','JavaScript,基础',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(655,0,0,0,'2','0','JavaScript 中 null 与 undefined 的数据类型相同。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'错误','JavaScript,类型',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(656,1,0,0,'2','0','CSS 中 display: none 的元素不会占据页面空间。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','CSS,布局',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(657,1,0,0,'2','1','CSS 中 position: absolute 的定位参照物一定是浏览器窗口。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'错误','CSS,定位',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(658,2,0,0,'2','0','HTML 中 <img> 标签是自闭合标签。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','HTML,标签',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(659,5,0,0,'2','0','Vue 中 v-if 与 v-show 都能控制元素的显示与隐藏。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','Vue,指令',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(660,4,0,0,'2','1','React 中 state 可以直接通过赋值方式修改。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'错误','React,state',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(661,6,0,0,'2','0','Node.js 采用单线程事件驱动模型。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','Node,基础',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(662,10,0,0,'2','0','HTTP 是一种无状态协议。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','HTTP,基础',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(663,9,0,0,'2','0','Git 中 git add 命令用于将文件加入暂存区。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','Git,命令',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(664,11,0,0,'2','1','localStorage 中存储的数据会随浏览器关闭而永久删除。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'错误','浏览器,存储',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(665,8,0,0,'2','0','TypeScript 是 JavaScript 的超集。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,'正确','TypeScript,基础',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(666,0,0,1,'3','1','请简述深拷贝与浅拷贝的区别。','',0,'浅拷贝只复制对象的第一层属性，内部嵌套对象仍与原对象共享引用；深拷贝会递归复制所有层级，生成完全独立的新对象。','JavaScript,对象',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(667,0,0,0,'3','1','请简述事件冒泡与事件捕获的区别。','',0,'事件捕获由外向内触发，事件冒泡由内向外触发；addEventListener 第三个参数为 true 时在捕获阶段触发，为 false 时在冒泡阶段触发。','JavaScript,事件',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(668,1,0,0,'3','1','请简述标准盒模型与 IE 盒模型的区别。','',0,'标准盒模型的 width/height 只包含 content；IE 盒模型的 width/height 包含 content、padding 和 border。','CSS,盒模型',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(669,5,0,0,'3','2','请简述 Vue 中 v-if 与 v-show 的区别。','',0,'v-if 是条件渲染，切换时会销毁并重建 DOM；v-show 通过 display 控制显隐，元素始终存在于 DOM 中，适合频繁切换。','Vue,指令',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(670,4,0,0,'3','2','请简述 React 中 useState 的作用。','',0,'useState 用于在函数组件中声明状态，返回当前状态值与更新函数，调用更新函数会触发组件重新渲染。','React,Hooks',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(671,6,0,0,'3','1','请简述 Node.js 中 require 与 import 的区别。','',0,'require 是 CommonJS 规范，运行时同步加载；import 是 ES Module 规范，编译时静态解析，支持 tree-shaking。','Node,模块',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(672,9,0,0,'3','1','请简述 git fetch 与 git pull 的区别。','',0,'git fetch 只从远程仓库下载更新到本地，不合并；git pull 等价于 fetch 加 merge，会直接合并到当前分支。','Git,命令',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(673,10,0,0,'3','1','请简述 HTTP 与 HTTPS 的区别。','',0,'HTTPS 在 HTTP 与 TCP 之间增加 SSL/TLS 加密层，通过证书验证身份并对数据加密，默认端口 443；HTTP 为明文传输，默认端口 80。','HTTP,安全',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(674,11,0,0,'3','1','请简述浏览器事件循环 Event Loop 的机制。','',0,'主线程同步执行任务，异步任务完成后将回调放入任务队列；主线程空闲时依次取出宏任务执行，并在宏任务之间清空微任务队列。','浏览器,原理',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(675,8,0,0,'3','1','请简述 TypeScript 中 interface 与 type 的区别。','',0,'两者都能描述类型；interface 支持声明合并、更适合描述对象形状，type 支持联合类型、交叉类型等更丰富的类型别名。','TypeScript,类型',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(676,7,0,0,'3','1','请简述 Webpack 的基本打包流程。','',0,'从 entry 入口开始递归解析依赖，构建模块依赖图，通过 loader 转换各类资源，最终将模块打包成 bundle 输出文件。','Webpack,原理',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(677,2,0,0,'3','1','请简述 HTML 语义化标签的作用。','',0,'语义化标签能清晰描述内容结构，利于搜索引擎优化（SEO）、无障碍访问与代码的可维护性。','HTML,语义化',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
-(678,0,0,NULL,'0','2','你好啊','[{\"code\":\"A\",\"value\":\"撒地方\"},{\"code\":\"B\",\"value\":\"啊士大夫\"},{\"code\":\"E\",\"value\":\"阿斯蒂芬\"}]',NULL,'正确选项：A','三百',1,'牛逼','请问','2026-08-24 23:00:20',0,'2026-08-25 00:09:15','admin');
+(562,0,0,7,'0','0','以下哪项不是 JavaScript 的基本数据类型？','[{\"code\":\"A\",\"value\":\"Number\"},{\"code\":\"B\",\"value\":\"String\"},{\"code\":\"C\",\"value\":\"Integer\"},{\"code\":\"D\",\"value\":\"Boolean\"}]',1,1,'正确选项：C','JavaScript,基础',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(563,0,0,3,'0','1','下列哪个方法可以向数组末尾添加一个元素？','[{\"code\":\"A\",\"value\":\"push\"},{\"code\":\"B\",\"value\":\"pop\"},{\"code\":\"C\",\"value\":\"shift\"},{\"code\":\"D\",\"value\":\"unshift\"}]',1,0,'正确选项：A','JavaScript,数组',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(564,1,0,3,'0','0','以下哪个 CSS 属性用于设置文字颜色？','[{\"code\":\"A\",\"value\":\"color\"},{\"code\":\"B\",\"value\":\"font-color\"},{\"code\":\"C\",\"value\":\"text-color\"},{\"code\":\"D\",\"value\":\"background-color\"}]',0,0,'正确选项：A','CSS,基础',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(565,1,0,1,'0','1','下列哪个选择器的优先级最高？','[{\"code\":\"A\",\"value\":\"#id\"},{\"code\":\"B\",\"value\":\".class\"},{\"code\":\"C\",\"value\":\"element\"},{\"code\":\"D\",\"value\":\"*\"}]',0,0,'正确选项：A','CSS,选择器',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(566,2,0,0,'0','0','HTML 中用于插入图片的标签是？','[{\"code\":\"A\",\"value\":\"<img>\"},{\"code\":\"B\",\"value\":\"<image>\"},{\"code\":\"C\",\"value\":\"<pic>\"},{\"code\":\"D\",\"value\":\"<figure>\"}]',0,0,'正确选项：A','HTML,基础',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(567,5,0,0,'0','1','Vue 中用于数据双向绑定的指令是？','[{\"code\":\"A\",\"value\":\"v-model\"},{\"code\":\"B\",\"value\":\"v-bind\"},{\"code\":\"C\",\"value\":\"v-on\"},{\"code\":\"D\",\"value\":\"v-if\"}]',0,0,'正确选项：A','Vue,指令',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(568,4,0,0,'0','1','在 React 函数组件中管理本地状态的 Hook 是？','[{\"code\":\"A\",\"value\":\"useState\"},{\"code\":\"B\",\"value\":\"useEffect\"},{\"code\":\"C\",\"value\":\"useContext\"},{\"code\":\"D\",\"value\":\"useMemo\"}]',0,0,'正确选项：A','React,Hook',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(569,8,0,1,'0','1','TypeScript 中定义接口使用的关键字是？','[{\"code\":\"A\",\"value\":\"interface\"},{\"code\":\"B\",\"value\":\"type\"},{\"code\":\"C\",\"value\":\"class\"},{\"code\":\"D\",\"value\":\"enum\"}]',0,0,'正确选项：A','TypeScript,基础',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(570,9,0,1,'0','0','将暂存区内容提交到本地仓库的 Git 命令是？','[{\"code\":\"A\",\"value\":\"git commit\"},{\"code\":\"B\",\"value\":\"git add\"},{\"code\":\"C\",\"value\":\"git push\"},{\"code\":\"D\",\"value\":\"git clone\"}]',0,0,'正确选项：A','Git,基础',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(571,10,0,0,'0','0','HTTP 中表示请求成功的状态码是？','[{\"code\":\"A\",\"value\":\"200\"},{\"code\":\"B\",\"value\":\"301\"},{\"code\":\"C\",\"value\":\"404\"},{\"code\":\"D\",\"value\":\"500\"}]',0,0,'正确选项：A','HTTP,状态码',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(572,0,0,4,'1','1','以下哪些是 ES6 新增的特性？','[{\"code\":\"A\",\"value\":\"let/const\"},{\"code\":\"B\",\"value\":\"箭头函数\"},{\"code\":\"C\",\"value\":\"模板字符串\"},{\"code\":\"D\",\"value\":\"Promise\"}]',0,0,'正确选项：ABCD','JavaScript,ES6',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(573,5,0,1,'1','1','以下哪些属于 Vue 的生命周期钩子？','[{\"code\":\"A\",\"value\":\"mounted\"},{\"code\":\"B\",\"value\":\"created\"},{\"code\":\"C\",\"value\":\"beforeUpdate\"},{\"code\":\"D\",\"value\":\"beforeDestroy\"}]',0,0,'正确选项：ABCD','Vue,生命周期',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(574,10,0,1,'1','1','以下哪些是常见的 HTTP 请求方法？','[{\"code\":\"A\",\"value\":\"GET\"},{\"code\":\"B\",\"value\":\"POST\"},{\"code\":\"C\",\"value\":\"PUT\"},{\"code\":\"D\",\"value\":\"DELETE\"}]',0,0,'正确选项：ABCD','HTTP,方法',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(575,9,0,0,'1','1','以下哪些是 Git 的常用命令？','[{\"code\":\"A\",\"value\":\"clone\"},{\"code\":\"B\",\"value\":\"branch\"},{\"code\":\"C\",\"value\":\"merge\"},{\"code\":\"D\",\"value\":\"status\"}]',0,0,'正确选项：ABCD','Git,命令',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(576,11,0,0,'1','1','以下哪些可以用作浏览器的本地存储？','[{\"code\":\"A\",\"value\":\"localStorage\"},{\"code\":\"B\",\"value\":\"sessionStorage\"},{\"code\":\"C\",\"value\":\"Cookie\"},{\"code\":\"D\",\"value\":\"IndexedDB\"}]',0,0,'正确选项：ABCD','浏览器,存储',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(577,8,0,1,'1','2','以下哪些是 TypeScript 支持的类型标注？','[{\"code\":\"A\",\"value\":\"string\"},{\"code\":\"B\",\"value\":\"number\"},{\"code\":\"C\",\"value\":\"boolean\"},{\"code\":\"D\",\"value\":\"any\"}]',0,0,'正确选项：ABCD','TypeScript,类型',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(578,0,0,2,'2','0','JavaScript 中 === 会进行严格类型比较。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','JavaScript,基础',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(579,0,0,1,'2','1','JavaScript 中 == 和 === 的行为完全一致。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'错误','JavaScript,基础',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(580,1,0,0,'2','0','CSS 中 id 选择器的优先级高于 class 选择器。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','CSS,选择器',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(581,2,0,0,'2','0','HTML 中 div 是块级元素。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','HTML,基础',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(582,5,0,0,'2','1','Vue 中 v-if 和 v-show 都会销毁并重建 DOM 元素。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'错误','Vue,指令',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(583,10,0,0,'2','0','HTTPS 是在 HTTP 基础上加入了 TLS/SSL 加密。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','HTTP,安全',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(584,9,0,0,'2','0','git pull 等价于 git fetch 加 git merge。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','Git,命令',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(585,6,0,1,'2','1','Node.js 采用单线程事件驱动模型。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','Node,基础',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(586,0,0,2,'3','1','请简述 var、let、const 的区别。','',0,0,'var 存在变量提升且可重复声明；let 具有块级作用域且不可重复声明；const 声明常量，值不可重新赋值，同样具有块级作用域。','JavaScript,基础',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(587,1,0,0,'3','1','请简述标准盒模型由哪些部分组成。','',0,0,'标准盒模型由 content（内容）、padding（内边距）、border（边框）、margin（外边距）四部分组成。','CSS,盒模型',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(588,5,0,0,'3','2','请列举 Vue 组件间通信的常用方式。','',0,0,'常用方式包括：父传子用 props、子传父用 emit、跨层级用 provide/inject、全局状态用 Vuex 或 Pinia、以及事件总线或 ref 访问组件实例。','Vue,通信',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(589,10,0,1,'3','1','请简述 GET 和 POST 请求的主要区别。','',0,0,'GET 参数拼接在 URL 中、可被缓存且通常幂等，适合查询；POST 参数放在请求体中、适合提交数据，一般不幂等且相对更安全。','HTTP,方法',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(590,4,0,0,'3','2','请简述受控组件与非受控组件的区别。','',0,0,'受控组件的表单值由 React state 控制并通过 onChange 更新；非受控组件不维护 state，直接通过 ref 读取 DOM 中的值。','React,表单',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(591,9,0,0,'3','1','请简述 git merge 与 git rebase 的区别。','',0,0,'merge 会保留分支历史并产生一个合并提交；rebase 会把当前分支的提交重放到目标分支之上，使历史更线性整洁。','Git,分支',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(592,11,0,2,'3','1','请简述从输入 URL 到页面显示经历了哪些主要步骤。','',0,0,'主要包括：DNS 解析域名、建立 TCP 连接、发送 HTTP 请求、服务器返回响应、浏览器解析 HTML/CSS/JS 并渲染页面。','浏览器,原理',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(593,6,0,0,'3','2','请简述 Node.js 事件循环的作用。','',0,0,'事件循环用于调度异步回调和非阻塞 IO，通过不断循环处理宏任务与微任务，保证单线程下的高并发能力。','Node,事件循环',1,NULL,'admin','2026-08-15 23:50:37',0,NULL,NULL),
+(594,3,0,0,'0','0','Angular 中实现双向数据绑定的语法是？','[{\"code\":\"A\",\"value\":\"[(ngModel)]\"},{\"code\":\"B\",\"value\":\"(ngModel)\"},{\"code\":\"C\",\"value\":\"[ngModel]\"},{\"code\":\"D\",\"value\":\"#ngModel\"}]',0,0,'正确选项：A','Angular,指令',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(595,3,0,0,'2','0','Angular 中 *ngIf 指令用于根据条件渲染元素。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','Angular,指令',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(596,3,0,0,'3','1','请简述 Angular 中组件、模块与服务的关系。','',0,0,'组件负责视图与交互；模块（NgModule）用于组织和声明组件、指令、服务等；服务（@Injectable）封装可复用的业务逻辑，通过依赖注入提供给组件使用。','Angular,基础',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(597,7,0,0,'0','0','Webpack 中用于处理 CSS 文件的 loader 是？','[{\"code\":\"A\",\"value\":\"css-loader\"},{\"code\":\"B\",\"value\":\"babel-loader\"},{\"code\":\"C\",\"value\":\"file-loader\"},{\"code\":\"D\",\"value\":\"url-loader\"}]',0,0,'正确选项：A','Webpack,loader',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(598,7,0,0,'0','1','Webpack 配置中用于指定入口文件的字段是？','[{\"code\":\"A\",\"value\":\"entry\"},{\"code\":\"B\",\"value\":\"output\"},{\"code\":\"C\",\"value\":\"module\"},{\"code\":\"D\",\"value\":\"plugins\"}]',0,0,'正确选项：A','Webpack,配置',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(599,7,0,0,'2','0','Webpack 的 mode 支持 development 和 production 两种模式。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','Webpack,基础',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(600,7,0,0,'3','1','请简述 Webpack 中 loader 与 plugin 的区别。','',0,0,'loader 用于转换单个模块的源码（如编译 CSS、JS），在打包过程中对文件进行预处理；plugin 作用于整个构建生命周期，通过钩子扩展打包、优化、产物处理等能力。','Webpack,基础',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(601,7,0,0,'1','1','以下哪些是常见的前端构建工具？','[{\"code\":\"A\",\"value\":\"Webpack\"},{\"code\":\"B\",\"value\":\"Vite\"},{\"code\":\"C\",\"value\":\"Rollup\"},{\"code\":\"D\",\"value\":\"Parcel\"}]',0,0,'正确选项：ABCD','Webpack,构建工具',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(602,11,0,0,'0','0','以下哪个不是浏览器渲染引擎？','[{\"code\":\"A\",\"value\":\"Blink\"},{\"code\":\"B\",\"value\":\"Gecko\"},{\"code\":\"C\",\"value\":\"WebKit\"},{\"code\":\"D\",\"value\":\"Node.js\"}]',0,0,'正确选项：D','浏览器,渲染引擎',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(603,11,0,0,'2','0','localStorage 中的数据在浏览器关闭后仍会保留。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','浏览器,存储',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(604,11,0,0,'3','2','请简述浏览器重排（reflow）与重绘（repaint）的区别。','',0,0,'重排是元素的几何属性（尺寸、位置）改变导致重新计算布局，开销较大；重绘是外观样式（颜色、背景）改变但不影响布局，只需重新绘制像素，开销较小。','浏览器,性能',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(605,11,0,0,'1','1','浏览器同源策略由哪些部分构成？','[{\"code\":\"A\",\"value\":\"协议\"},{\"code\":\"B\",\"value\":\"域名\"},{\"code\":\"C\",\"value\":\"端口\"},{\"code\":\"D\",\"value\":\"路径\"}]',0,0,'正确选项：ABC','浏览器,同源策略',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(606,10,0,0,'0','1','HTTP 响应头中用于缓存控制的是？','[{\"code\":\"A\",\"value\":\"Cache-Control\"},{\"code\":\"B\",\"value\":\"Content-Type\"},{\"code\":\"C\",\"value\":\"Accept\"},{\"code\":\"D\",\"value\":\"Cookie\"}]',0,0,'正确选项：A','HTTP,缓存',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(607,10,0,0,'2','0','状态码 404 表示请求的资源未找到。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','HTTP,状态码',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(608,10,0,1,'3','1','请简述 HTTP/2 相比 HTTP/1.1 的主要改进。','',0,0,'HTTP/2 支持二进制分帧、头部压缩（HPACK）、多路复用、服务器推送，减少了队头阻塞并提升传输效率。','HTTP,协议',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(609,10,0,0,'1','0','以下哪些是 HTTP 常见的请求头？','[{\"code\":\"A\",\"value\":\"User-Agent\"},{\"code\":\"B\",\"value\":\"Content-Type\"},{\"code\":\"C\",\"value\":\"Accept\"},{\"code\":\"D\",\"value\":\"Authorization\"}]',0,0,'正确选项：ABCD','HTTP,请求头',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(610,6,0,0,'0','0','Node.js 中用于读写文件的模块是？','[{\"code\":\"A\",\"value\":\"fs\"},{\"code\":\"B\",\"value\":\"http\"},{\"code\":\"C\",\"value\":\"path\"},{\"code\":\"D\",\"value\":\"os\"}]',0,0,'正确选项：A','Node,fs',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(611,6,0,0,'2','0','Node.js 使用 CommonJS 模块规范，require 用于引入模块。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','Node,模块',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(612,6,0,0,'3','1','请简述 Node.js 中 require 查找模块的规则。','',0,0,'require 会先判断是否为内置模块或相对/绝对路径，再依次在 node_modules 目录中逐级向上查找模块的 package.json main 字段或 index 文件。','Node,模块',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(613,1,0,1,'0','0','下列哪个属性可以让元素采用弹性布局？','[{\"code\":\"A\",\"value\":\"display:flex\"},{\"code\":\"B\",\"value\":\"display:block\"},{\"code\":\"C\",\"value\":\"position:flex\"},{\"code\":\"D\",\"value\":\"float:flex\"}]',0,0,'正确选项：A','CSS,布局',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(614,1,0,0,'2','1','CSS 中 em 是相对单位，1em 相对于父元素的 font-size。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','CSS,单位',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(615,0,0,1,'0','0','判断一个值是否为 NaN 应使用哪个函数？','[{\"code\":\"A\",\"value\":\"isNaN\"},{\"code\":\"B\",\"value\":\"isNull\"},{\"code\":\"C\",\"value\":\"isUndefined\"},{\"code\":\"D\",\"value\":\"isString\"}]',0,0,'正确选项：A','JavaScript,基础',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(616,0,0,1,'2','1','JavaScript 中 typeof null 的结果是 object。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','JavaScript,基础',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(617,2,0,0,'0','0','HTML5 中用于定义页眉区域的语义化标签是？','[{\"code\":\"A\",\"value\":\"<header>\"},{\"code\":\"B\",\"value\":\"<head>\"},{\"code\":\"C\",\"value\":\"<top>\"},{\"code\":\"D\",\"value\":\"<title>\"}]',0,0,'正确选项：A','HTML,语义化',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(618,2,0,0,'2','0','input 的 type=email 在表单提交时会做基础的邮箱格式校验。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','HTML,表单',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(619,5,0,0,'0','1','Vue 3 中用于创建响应式对象的 API 是？','[{\"code\":\"A\",\"value\":\"reactive\"},{\"code\":\"B\",\"value\":\"computed\"},{\"code\":\"C\",\"value\":\"watch\"},{\"code\":\"D\",\"value\":\"nextTick\"}]',0,0,'正确选项：A','Vue,响应式',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(620,5,0,0,'2','0','Vue 3 使用 Proxy 实现响应式系统。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','Vue,响应式',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(621,4,0,0,'0','0','React 中父组件向子组件传递数据通常使用？','[{\"code\":\"A\",\"value\":\"props\"},{\"code\":\"B\",\"value\":\"state\"},{\"code\":\"C\",\"value\":\"refs\"},{\"code\":\"D\",\"value\":\"context\"}]',0,0,'正确选项：A','React,props',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(622,4,0,0,'2','0','React 列表渲染中 key 属性用于帮助 diff 算法识别元素变化。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','React,key',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(623,8,0,0,'0','1','TypeScript 中定义一个可选属性的写法是？','[{\"code\":\"A\",\"value\":\"name?: string\"},{\"code\":\"B\",\"value\":\"name!: string\"},{\"code\":\"C\",\"value\":\"name = string\"},{\"code\":\"D\",\"value\":\"name string\"}]',0,0,'正确选项：A','TypeScript,类型',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(624,8,0,0,'2','0','TypeScript 最终会被编译成 JavaScript 才能运行。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','TypeScript,基础',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(625,9,0,0,'0','0','查看 Git 提交历史的命令是？','[{\"code\":\"A\",\"value\":\"git log\"},{\"code\":\"B\",\"value\":\"git status\"},{\"code\":\"C\",\"value\":\"git diff\"},{\"code\":\"D\",\"value\":\"git branch\"}]',0,0,'正确选项：A','Git,命令',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(626,9,0,0,'2','0','git branch 命令可以查看或创建分支。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','Git,分支',1,NULL,'admin','2026-08-16 00:14:35',0,NULL,NULL),
+(627,0,0,0,'0','1','数组方法中，用于删除并返回最后一个元素的是？','[{\"code\":\"A\",\"value\":\"pop\"},{\"code\":\"B\",\"value\":\"push\"},{\"code\":\"C\",\"value\":\"shift\"},{\"code\":\"D\",\"value\":\"unshift\"}]',0,0,'正确选项：A','JavaScript,数组',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(628,0,0,0,'0','1','以下哪个方法可以把 JSON 字符串解析为 JavaScript 对象？','[{\"code\":\"A\",\"value\":\"JSON.parse\"},{\"code\":\"B\",\"value\":\"JSON.stringify\"},{\"code\":\"C\",\"value\":\"eval\"},{\"code\":\"D\",\"value\":\"parseInt\"}]',0,0,'正确选项：A','JavaScript,JSON',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(629,0,0,0,'0','0','JavaScript 中表示「未定义」的值是？','[{\"code\":\"A\",\"value\":\"null\"},{\"code\":\"B\",\"value\":\"undefined\"},{\"code\":\"C\",\"value\":\"NaN\"},{\"code\":\"D\",\"value\":\"void\"}]',0,0,'正确选项：B','JavaScript,基础',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(630,1,0,0,'0','1','使元素相对于自身原始位置进行偏移的定位方式是？','[{\"code\":\"A\",\"value\":\"relative\"},{\"code\":\"B\",\"value\":\"absolute\"},{\"code\":\"C\",\"value\":\"fixed\"},{\"code\":\"D\",\"value\":\"static\"}]',0,0,'正确选项：A','CSS,定位',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(631,1,0,0,'0','0','实现块级元素水平居中的常见写法是？','[{\"code\":\"A\",\"value\":\"margin: 0 auto\"},{\"code\":\"B\",\"value\":\"padding: 0 auto\"},{\"code\":\"C\",\"value\":\"margin: auto 0\"},{\"code\":\"D\",\"value\":\"text-align: center\"}]',0,0,'正确选项：A','CSS,布局',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(632,2,0,0,'0','0','HTML 中用于定义无序列表的标签是？','[{\"code\":\"A\",\"value\":\"<ul>\"},{\"code\":\"B\",\"value\":\"<ol>\"},{\"code\":\"C\",\"value\":\"<dl>\"},{\"code\":\"D\",\"value\":\"<li>\"}]',0,0,'正确选项：A','HTML,标签',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(633,2,0,0,'0','1','HTML 中用于在 head 内引入外部 CSS 文件的标签是？','[{\"code\":\"A\",\"value\":\"<link>\"},{\"code\":\"B\",\"value\":\"<script>\"},{\"code\":\"C\",\"value\":\"<style>\"},{\"code\":\"D\",\"value\":\"<import>\"}]',0,0,'正确选项：A','HTML,标签',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(634,5,0,0,'0','0','Vue 中用于条件渲染的指令是？','[{\"code\":\"A\",\"value\":\"v-if\"},{\"code\":\"B\",\"value\":\"v-for\"},{\"code\":\"C\",\"value\":\"v-model\"},{\"code\":\"D\",\"value\":\"v-bind\"}]',0,0,'正确选项：A','Vue,指令',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(635,5,0,0,'0','1','Vue 中用于定义计算属性的配置项是？','[{\"code\":\"A\",\"value\":\"computed\"},{\"code\":\"B\",\"value\":\"watch\"},{\"code\":\"C\",\"value\":\"methods\"},{\"code\":\"D\",\"value\":\"props\"}]',0,0,'正确选项：A','Vue,选项',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(636,4,0,0,'0','1','React 函数组件中用于管理状态的是？','[{\"code\":\"A\",\"value\":\"useState\"},{\"code\":\"B\",\"value\":\"useEffect\"},{\"code\":\"C\",\"value\":\"useRef\"},{\"code\":\"D\",\"value\":\"useContext\"}]',0,0,'正确选项：A','React,Hooks',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(637,4,0,0,'0','0','React 中用于描述 UI 结构的语法是？','[{\"code\":\"A\",\"value\":\"JSX\"},{\"code\":\"B\",\"value\":\"XML\"},{\"code\":\"C\",\"value\":\"HTML\"},{\"code\":\"D\",\"value\":\"TSX\"}]',0,0,'正确选项：A','React,JSX',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(638,6,0,0,'0','0','Node.js 中用于创建 HTTP 服务器的模块是？','[{\"code\":\"A\",\"value\":\"http\"},{\"code\":\"B\",\"value\":\"fs\"},{\"code\":\"C\",\"value\":\"net\"},{\"code\":\"D\",\"value\":\"dns\"}]',0,0,'正确选项：A','Node,模块',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(639,9,0,0,'0','0','Git 中创建并切换到新分支的命令是？','[{\"code\":\"A\",\"value\":\"git checkout -b\"},{\"code\":\"B\",\"value\":\"git branch\"},{\"code\":\"C\",\"value\":\"git switch -d\"},{\"code\":\"D\",\"value\":\"git new\"}]',0,0,'正确选项：A','Git,分支',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(640,9,0,0,'0','1','Git 中用于查看提交历史的命令是？','[{\"code\":\"A\",\"value\":\"git log\"},{\"code\":\"B\",\"value\":\"git status\"},{\"code\":\"C\",\"value\":\"git diff\"},{\"code\":\"D\",\"value\":\"git show\"}]',0,0,'正确选项：A','Git,命令',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(641,10,0,0,'0','0','HTTP 状态码 500 表示？','[{\"code\":\"A\",\"value\":\"服务器内部错误\"},{\"code\":\"B\",\"value\":\"资源未找到\"},{\"code\":\"C\",\"value\":\"请求成功\"},{\"code\":\"D\",\"value\":\"重定向\"}]',0,0,'正确选项：A','HTTP,状态码',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(642,10,0,0,'0','1','HTTP 响应头中用于协商缓存的是？','[{\"code\":\"A\",\"value\":\"ETag\"},{\"code\":\"B\",\"value\":\"Cookie\"},{\"code\":\"C\",\"value\":\"Host\"},{\"code\":\"D\",\"value\":\"Content-Type\"}]',0,0,'正确选项：A','HTTP,缓存',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(643,11,0,0,'0','0','浏览器中主要负责解析 HTML 与 CSS 的是？','[{\"code\":\"A\",\"value\":\"渲染引擎\"},{\"code\":\"B\",\"value\":\"JS 引擎\"},{\"code\":\"C\",\"value\":\"网络模块\"},{\"code\":\"D\",\"value\":\"存储模块\"}]',0,0,'正确选项：A','浏览器,渲染',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(644,8,0,0,'0','1','TypeScript 中用于把 .ts 编译为 .js 的命令是？','[{\"code\":\"A\",\"value\":\"tsc\"},{\"code\":\"B\",\"value\":\"ts-node\"},{\"code\":\"C\",\"value\":\"node\"},{\"code\":\"D\",\"value\":\"npm run\"}]',0,0,'正确选项：A','TypeScript,编译',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(645,7,0,0,'0','1','Webpack 配置中用于指定入口文件的字段是？','[{\"code\":\"A\",\"value\":\"entry\"},{\"code\":\"B\",\"value\":\"output\"},{\"code\":\"C\",\"value\":\"module\"},{\"code\":\"D\",\"value\":\"plugins\"}]',0,0,'正确选项：A','Webpack,配置',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(646,0,0,0,'1','1','以下哪些是 JavaScript 数组的常用方法？','[{\"code\":\"A\",\"value\":\"map\"},{\"code\":\"B\",\"value\":\"filter\"},{\"code\":\"C\",\"value\":\"reduce\"},{\"code\":\"D\",\"value\":\"concat\"}]',0,0,'正确选项：ABCD','JavaScript,数组',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(647,0,0,1,'1','1','以下哪些属于 JavaScript 的引用类型？','[{\"code\":\"A\",\"value\":\"Object\"},{\"code\":\"B\",\"value\":\"Array\"},{\"code\":\"C\",\"value\":\"Function\"},{\"code\":\"D\",\"value\":\"Number\"}]',0,0,'正确选项：ABC','JavaScript,类型',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(648,5,0,0,'1','1','以下哪些是 Vue 的常用指令？','[{\"code\":\"A\",\"value\":\"v-if\"},{\"code\":\"B\",\"value\":\"v-for\"},{\"code\":\"C\",\"value\":\"v-model\"},{\"code\":\"D\",\"value\":\"v-bind\"}]',0,0,'正确选项：ABCD','Vue,指令',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(649,5,0,0,'1','1','以下哪些属于 Vue Router 的常用组成？','[{\"code\":\"A\",\"value\":\"router-link\"},{\"code\":\"B\",\"value\":\"router-view\"},{\"code\":\"C\",\"value\":\"$router.push\"},{\"code\":\"D\",\"value\":\"$route.query\"}]',0,0,'正确选项：ABCD','Vue,路由',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(650,10,0,0,'1','0','以下哪些是 HTTP 3xx 重定向状态码？','[{\"code\":\"A\",\"value\":\"301\"},{\"code\":\"B\",\"value\":\"302\"},{\"code\":\"C\",\"value\":\"304\"},{\"code\":\"D\",\"value\":\"404\"}]',0,0,'正确选项：ABC','HTTP,状态码',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(651,9,0,0,'1','1','以下哪些是 Git 的常用命令？','[{\"code\":\"A\",\"value\":\"git add\"},{\"code\":\"B\",\"value\":\"git commit\"},{\"code\":\"C\",\"value\":\"git push\"},{\"code\":\"D\",\"value\":\"git pull\"}]',0,0,'正确选项：ABCD','Git,命令',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(652,11,0,0,'1','0','以下哪些属于浏览器提供的 Web 存储？','[{\"code\":\"A\",\"value\":\"localStorage\"},{\"code\":\"B\",\"value\":\"sessionStorage\"},{\"code\":\"C\",\"value\":\"Cookie\"},{\"code\":\"D\",\"value\":\"IndexedDB\"}]',0,0,'正确选项：ABCD','浏览器,存储',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(653,8,0,0,'1','1','以下哪些是 TypeScript 的基础类型？','[{\"code\":\"A\",\"value\":\"string\"},{\"code\":\"B\",\"value\":\"number\"},{\"code\":\"C\",\"value\":\"boolean\"},{\"code\":\"D\",\"value\":\"any\"}]',0,0,'正确选项：ABCD','TypeScript,类型',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(654,0,0,1,'2','0','JavaScript 中 const 声明的变量不可以重新赋值。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','JavaScript,基础',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(655,0,0,0,'2','0','JavaScript 中 null 与 undefined 的数据类型相同。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'错误','JavaScript,类型',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(656,1,0,0,'2','0','CSS 中 display: none 的元素不会占据页面空间。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','CSS,布局',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(657,1,0,0,'2','1','CSS 中 position: absolute 的定位参照物一定是浏览器窗口。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'错误','CSS,定位',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(658,2,0,0,'2','0','HTML 中 <img> 标签是自闭合标签。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','HTML,标签',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(659,5,0,0,'2','0','Vue 中 v-if 与 v-show 都能控制元素的显示与隐藏。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','Vue,指令',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(660,4,0,0,'2','1','React 中 state 可以直接通过赋值方式修改。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'错误','React,state',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(661,6,0,0,'2','0','Node.js 采用单线程事件驱动模型。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','Node,基础',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(662,10,0,0,'2','0','HTTP 是一种无状态协议。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','HTTP,基础',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(663,9,0,0,'2','0','Git 中 git add 命令用于将文件加入暂存区。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','Git,命令',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(664,11,0,0,'2','1','localStorage 中存储的数据会随浏览器关闭而永久删除。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'错误','浏览器,存储',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(665,8,0,0,'2','0','TypeScript 是 JavaScript 的超集。','[{\"code\":\"正确\",\"value\":\"\"},{\"code\":\"错误\",\"value\":\"\"}]',0,0,'正确','TypeScript,基础',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(666,0,0,2,'3','1','请简述深拷贝与浅拷贝的区别。','',0,0,'浅拷贝只复制对象的第一层属性，内部嵌套对象仍与原对象共享引用；深拷贝会递归复制所有层级，生成完全独立的新对象。','JavaScript,对象',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(667,0,0,0,'3','1','请简述事件冒泡与事件捕获的区别。','',0,0,'事件捕获由外向内触发，事件冒泡由内向外触发；addEventListener 第三个参数为 true 时在捕获阶段触发，为 false 时在冒泡阶段触发。','JavaScript,事件',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(668,1,0,0,'3','1','请简述标准盒模型与 IE 盒模型的区别。','',0,0,'标准盒模型的 width/height 只包含 content；IE 盒模型的 width/height 包含 content、padding 和 border。','CSS,盒模型',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(669,5,0,0,'3','2','请简述 Vue 中 v-if 与 v-show 的区别。','',0,0,'v-if 是条件渲染，切换时会销毁并重建 DOM；v-show 通过 display 控制显隐，元素始终存在于 DOM 中，适合频繁切换。','Vue,指令',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(670,4,0,0,'3','2','请简述 React 中 useState 的作用。','',0,0,'useState 用于在函数组件中声明状态，返回当前状态值与更新函数，调用更新函数会触发组件重新渲染。','React,Hooks',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(671,6,0,0,'3','1','请简述 Node.js 中 require 与 import 的区别。','',0,0,'require 是 CommonJS 规范，运行时同步加载；import 是 ES Module 规范，编译时静态解析，支持 tree-shaking。','Node,模块',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(672,9,0,0,'3','1','请简述 git fetch 与 git pull 的区别。','',0,0,'git fetch 只从远程仓库下载更新到本地，不合并；git pull 等价于 fetch 加 merge，会直接合并到当前分支。','Git,命令',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(673,10,0,0,'3','1','请简述 HTTP 与 HTTPS 的区别。','',0,0,'HTTPS 在 HTTP 与 TCP 之间增加 SSL/TLS 加密层，通过证书验证身份并对数据加密，默认端口 443；HTTP 为明文传输，默认端口 80。','HTTP,安全',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(674,11,0,0,'3','1','请简述浏览器事件循环 Event Loop 的机制。','',0,0,'主线程同步执行任务，异步任务完成后将回调放入任务队列；主线程空闲时依次取出宏任务执行，并在宏任务之间清空微任务队列。','浏览器,原理',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(675,8,0,0,'3','1','请简述 TypeScript 中 interface 与 type 的区别。','',0,0,'两者都能描述类型；interface 支持声明合并、更适合描述对象形状，type 支持联合类型、交叉类型等更丰富的类型别名。','TypeScript,类型',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(676,7,0,0,'3','1','请简述 Webpack 的基本打包流程。','',0,0,'从 entry 入口开始递归解析依赖，构建模块依赖图，通过 loader 转换各类资源，最终将模块打包成 bundle 输出文件。','Webpack,原理',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(677,2,0,0,'3','1','请简述 HTML 语义化标签的作用。','',0,0,'语义化标签能清晰描述内容结构，利于搜索引擎优化（SEO）、无障碍访问与代码的可维护性。','HTML,语义化',1,'审核通过','admin','2026-08-24 22:47:55',0,NULL,NULL),
+(678,0,0,NULL,'0','1','你好啊','[{\"code\":\"A\",\"value\":\"撒地方\"},{\"code\":\"B\",\"value\":\"啊士大夫\"},{\"code\":\"E\",\"value\":\"阿斯蒂芬\"}]',NULL,1,'正确选项：A','三百',0,'牛逼','请问','2026-08-24 23:00:20',0,'2026-08-26 21:56:43','请问'),
+(679,0,0,NULL,'0','1','1','[{\"code\":\"A\",\"value\":\"1\"},{\"code\":\"B\",\"value\":\"1\"},{\"code\":\"C\",\"value\":\"1\"},{\"code\":\"D\",\"value\":\"1\"}]',NULL,1,'正确选项：A','',0,'审核通过','小米','2026-08-26 22:18:28',0,'2026-08-26 22:29:55','小米');
 /*!40000 ALTER TABLE `questions` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1421,7 +1441,8 @@ LOCK TABLES `session` WRITE;
 /*!40000 ALTER TABLE `session` DISABLE KEYS */;
 INSERT INTO `session` VALUES
 ('33f50a45-ef5a-4b5e-84c8-f6731de45c56','{\"userId\":4,\"username\":\"请问\",\"_expire\":1787663565685,\"_maxAge\":86400000}',1787663575685,'2026-08-24 21:12:45'),
-('3783576e-ebab-494f-88c2-f055392f4673','{\"userId\":4,\"username\":\"请问\",\"_expire\":1786960749470,\"_maxAge\":86400000}',1786960759470,'2026-08-16 17:59:09');
+('3783576e-ebab-494f-88c2-f055392f4673','{\"userId\":4,\"username\":\"请问\",\"_expire\":1786960749470,\"_maxAge\":86400000}',1786960759470,'2026-08-16 17:59:09'),
+('a85830d1-79c7-4a12-8329-b40c8ba9a9f4','{\"userId\":4,\"username\":\"请问\",\"_expire\":1787841012666,\"_maxAge\":86400000}',1787841022666,'2026-08-26 22:30:12');
 /*!40000 ALTER TABLE `session` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1457,9 +1478,9 @@ LOCK TABLES `user` WRITE;
 /*!40000 ALTER TABLE `user` DISABLE KEYS */;
 INSERT INTO `user` VALUES
 (1,'admin','$2b$10$Bb0QdpS9JgFHSwz//nTq7uyxaU77IPf6cIMouM/PH34kbmV/8uOG2','123456','1','eaogoyang@163.com','2023-03-19 15:58:14','https://api.dicebear.com/7.x/avataaars/svg?seed=admin','2026-08-15 22:25:53','',0,0),
-(2,'小米','$2b$10$nAzDPvkbYZFTd9CZtO3ZOOBsoQr5jmBwf4e9QkygLZNh.GSfme0vK','18111111111','1','eaogoyang@163.com','2023-03-19 15:58:14','https://api.dicebear.com/7.x/avataaars/svg?seed=xiaomi','2026-08-16 17:53:06','dfsgdfsgdf',0,0),
+(2,'小米','$2b$10$nAzDPvkbYZFTd9CZtO3ZOOBsoQr5jmBwf4e9QkygLZNh.GSfme0vK','18111111111','1','eaogoyang@163.com','2023-03-19 15:58:14','https://api.dicebear.com/7.x/avataaars/svg?seed=xiaomi','2026-08-26 22:29:46','dfsgdfsgdf',0,0),
 (3,'18岁老太太','$2b$10$QfnSNXxEoLlIxmSMJixFPOgL5njq1rrEzrqo6TZK5hCvR3QM9G59y','18000000000','1','eaogoyang@163.com','2023-03-19 15:59:09','https://api.dicebear.com/7.x/avataaars/svg?seed=oldlady','2026-08-15 22:30:42',NULL,0,0),
-(4,'请问','$2b$10$IMqEd4SJmvoC0.hsCmzoJ.LcoBqRNtZjKwXlJCq3B7tCJ1M9KUQey','19999999999','0','123@qq.com','2026-08-15 19:46:39','/public/uploads/4_1787589302504_common.jpg','2026-08-24 21:32:50','',0,0),
+(4,'请问','$2b$10$IMqEd4SJmvoC0.hsCmzoJ.LcoBqRNtZjKwXlJCq3B7tCJ1M9KUQey','19999999999','1','123@qq.com','2026-08-15 19:46:39','/public/uploads/4_1787589302504_common.jpg','2026-08-26 22:30:12','iii',0,0),
 (5,'啊啊啊啊啊啊啊啊','$2b$10$SVBf5mJNqXwoO4bsjbTcuO.om4sfS8ZZbc7GVhgJAYWylyKiI7e/a','17777777777','0','1@qq.com','2026-08-16 00:20:53','https://api.dicebear.com/7.x/avataaars/svg?seed=aa987654','2026-08-16 00:20:53','',0,1);
 /*!40000 ALTER TABLE `user` ENABLE KEYS */;
 UNLOCK TABLES;
@@ -1486,7 +1507,9 @@ CREATE TABLE `user_favorite_question` (
 LOCK TABLES `user_favorite_question` WRITE;
 /*!40000 ALTER TABLE `user_favorite_question` DISABLE KEYS */;
 INSERT INTO `user_favorite_question` VALUES
-(4,678,'2026-08-25 00:30:37');
+(4,562,'2026-08-26 22:38:44'),
+(4,678,'2026-08-25 00:30:37'),
+(4,679,'2026-08-26 22:23:25');
 /*!40000 ALTER TABLE `user_favorite_question` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1537,7 +1560,9 @@ LOCK TABLES `user_like_question` WRITE;
 /*!40000 ALTER TABLE `user_like_question` DISABLE KEYS */;
 INSERT INTO `user_like_question` VALUES
 (4,562,'2026-08-16 01:00:35'),
-(4,678,'2026-08-25 00:30:38');
+(4,563,'2026-08-26 22:38:39'),
+(4,678,'2026-08-25 00:30:38'),
+(4,679,'2026-08-26 22:23:25');
 /*!40000 ALTER TABLE `user_like_question` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1563,6 +1588,7 @@ CREATE TABLE `user_upload_question` (
 LOCK TABLES `user_upload_question` WRITE;
 /*!40000 ALTER TABLE `user_upload_question` DISABLE KEYS */;
 INSERT INTO `user_upload_question` VALUES
+(2,679,'2026-08-26 22:18:28'),
 (4,678,'2026-08-24 23:00:20');
 /*!40000 ALTER TABLE `user_upload_question` ENABLE KEYS */;
 UNLOCK TABLES;
@@ -1576,4 +1602,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-08-25  0:45:58
+-- Dump completed on 2026-08-26 22:44:01

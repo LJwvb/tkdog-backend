@@ -67,6 +67,16 @@ export default class admin extends Controller {
       ctx.fail('获取统计信息失败');
     }
   }
+  // 未审核数量统计（导航栏红点）
+  public async getPendingCounts() {
+    const { ctx } = this;
+    const result = await ctx.service.admin.getPendingCounts();
+    if (result) {
+      ctx.success(result, '请求成功');
+    } else {
+      ctx.fail('获取统计失败');
+    }
+  }
   // 获取未审核题目
   public async getNoChkQuestions() {
     const { ctx } = this;

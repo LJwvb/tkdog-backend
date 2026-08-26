@@ -212,6 +212,32 @@ export default class admin extends Service {
       return null;
     }
   }
+  // 未审核数量统计（导航栏红点）
+  public async getPendingCounts() {
+    const { app } = this;
+    try {
+      const one = async (sql: string) => {
+        const rows: any = await app.mysql.query(sql);
+        return Number(rows?.[0]?.c) || 0;
+      };
+      return {
+        pendingQuestions: await one(
+          'SELECT COUNT(*) AS c FROM questions WHERE chkState = 0 AND is_deleted = 0',
+        ),
+        pendingPapers: await one(
+          'SELECT COUNT(*) AS c FROM examination_paper WHERE chkState = 0 AND is_deleted = 0',
+        ),
+        pendingComments: await one(
+          'SELECT COUNT(*) AS c FROM comment WHERE status = 0 AND is_deleted = 0',
+        ),
+        unresolvedFeedback: await one(
+          'SELECT COUNT(*) AS c FROM question_feedback WHERE is_resolved = 0',
+        ),
+      };
+    } catch (err) {
+      return null;
+    }
+  }
   // 所有未审核的题目
   public async getNoChkQuestions(params) {
     const { app } = this;
@@ -303,6 +329,8 @@ export default class admin extends Service {
         { is_deleted: 1 },
         { where: { question_id: id } },
       );
+      // 从所有试卷中剔除该题
+      await app.mysql.delete('paper_question', { question_id: id });
       return { success: true };
     } catch (err) {
       return null;
