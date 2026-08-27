@@ -1,11 +1,12 @@
 import { Context, EggAppConfig, EggAppInfo, PowerPartial } from 'egg';
 
-export default (appInfo: EggAppInfo) => {
+export default (_appInfo: EggAppInfo) => {
   const config = {} as PowerPartial<EggAppConfig>;
 
   // override config from framework / plugin
   // use for cookie sign key, should change to your own and keep security
-  config.keys = appInfo.name + '_1671019775307_7697';
+  // 签名密钥从环境变量注入（默认值仅供本地演示），防止源码泄露后被伪造 ADMIN_SESS cookie
+  config.keys = process.env.COOKIE_KEYS || 'tkdog_dev_insecure_keys_change_me';
 
   // add your egg config in here
   config.middleware = [];

@@ -69,22 +69,27 @@ export default class admin extends Service {
       );
       const admin = await app.mysql.select('admin');
       const list: any[] = [ ...admin, ...user ];
-      // 一次性按 creator 聚合题目统计，避免逐用户查询（N+1）
+      // 一次性按 user_id 聚合题目统计（user_upload_question 关联，避免用户名修改后统计错乱）
       const statsRows: any = await app.mysql.query(
-        'SELECT creator, COUNT(*) AS upload_ques_num, ' +
-          'COALESCE(SUM(likes_num),0) AS like_ques_num, ' +
-          'COALESCE(SUM(CASE WHEN chkState=1 THEN 1 ELSE 0 END), 0) AS approvedNums ' +
-          'FROM questions WHERE is_deleted = 0 GROUP BY creator',
+        'SELECT uq.user_id, COUNT(*) AS upload_ques_num, ' +
+          'COALESCE(SUM(q.likes_num),0) AS like_ques_num, ' +
+          'COALESCE(SUM(CASE WHEN q.chkState=1 THEN 1 ELSE 0 END), 0) AS approvedNums ' +
+          'FROM user_upload_question uq JOIN questions q ON uq.question_id = q.id ' +
+          'WHERE q.is_deleted = 0 GROUP BY uq.user_id',
       );
-      const statsMap = new Map<string, any>();
-      statsRows.forEach((r: any) => statsMap.set(r.creator, r));
+      const statsMap = new Map<number, any>();
+      statsRows.forEach((r: any) => statsMap.set(Number(r.user_id), r));
       for (const item of list) {
-        const creator = item.username || item.name;
-        if (creator) {
-          const stats = statsMap.get(creator);
+        // 普通用户按唯一 user_id 匹配上传统计；管理员行无 userId，不参与用户上传统计
+        if (item.userId) {
+          const stats = statsMap.get(Number(item.userId));
           item.upload_ques_num = Number(stats?.upload_ques_num) || 0;
           item.like_ques_num = Number(stats?.like_ques_num) || 0;
           item.approvedNums = Number(stats?.approvedNums) || 0;
+        } else {
+          item.upload_ques_num = 0;
+          item.like_ques_num = 0;
+          item.approvedNums = 0;
         }
         // 普通用户积分用与用户端完全一致的 computePoints 实时计算（上传×2 + 审核通过×5 + 答对×1 + 打卡×5）
         if (item.userId) {
@@ -356,9 +361,9 @@ export default class admin extends Service {
       const paper: any = await app.mysql.get('examination_paper', {
         paper_id: paperId,
       });
-      if (paper?.author) {
+      if (paper?.user_id) {
         const author: any = await app.mysql.get('user', {
-          username: paper.author,
+          userId: paper.user_id,
         });
         if (author?.userId) {
           const stateText = Number(chkState) === 1 ? '审核通过' : '审核不通过';

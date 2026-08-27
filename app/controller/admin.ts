@@ -11,6 +11,11 @@ export default class admin extends Controller {
       ctx.fail('请填写完整信息~');
       return;
     }
+    // 防暴力破解：管理员登录同样按 IP 限流（复用用户登录限流器）
+    if (ctx.service.user.isLoginRateLimited(ctx.ip)) {
+      ctx.fail('登录过于频繁，请稍后再试');
+      return;
+    }
     const data = await ctx.service.admin.adminLogin(ctx.request.body);
     if (data) {
       // 管理员身份写入独立 cookie（ADMIN_SESS），与普通用户 session 完全隔离，互不覆盖

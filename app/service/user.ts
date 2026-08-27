@@ -147,14 +147,14 @@ export default class User extends Service {
       }
       if (!result) return null;
 
-      const creator = result.username;
-      // 实时统计：上传数、获赞数、审核通过数（不依赖 user 表冗余字段，避免不同步）
+      // 实时统计：上传数、获赞数、审核通过数（按唯一 user_id 关联 user_upload_question，避免用户名修改后统计错乱）
       const stats = await app.mysql.query(
         'SELECT COUNT(*) AS upload_ques_num, ' +
-          'COALESCE(SUM(likes_num),0) AS like_ques_num, ' +
-          'COALESCE(SUM(CASE WHEN chkState=1 THEN 1 ELSE 0 END), 0) AS approvedNums ' +
-          'FROM questions WHERE creator = ?',
-        [ creator ],
+          'COALESCE(SUM(q.likes_num),0) AS like_ques_num, ' +
+          'COALESCE(SUM(CASE WHEN q.chkState=1 THEN 1 ELSE 0 END), 0) AS approvedNums ' +
+          'FROM user_upload_question uq JOIN questions q ON uq.question_id = q.id ' +
+          'WHERE uq.user_id = ? AND q.is_deleted = 0',
+        [ result.userId ],
       );
       result.upload_ques_num = stats[0].upload_ques_num;
       result.like_ques_num = stats[0].like_ques_num;
@@ -194,13 +194,14 @@ export default class User extends Service {
       if (!user) {
         return { upload: 0, approved: 0, likes: 0, correct: 0, checkin: 0, integral: 0 };
       }
-      const sinceCond = since ? ' AND addDate >= ?' : '';
-      const statsParams: any = since ? [ user.username, since ] : [ user.username ];
+      const sinceCond = since ? ' AND q.addDate >= ?' : '';
+      const statsParams: any = since ? [ userId, since ] : [ userId ];
       const stats: any = await app.mysql.query(
         'SELECT COUNT(*) AS upload, ' +
-          'COALESCE(SUM(CASE WHEN chkState=1 THEN 1 ELSE 0 END),0) AS approved, ' +
-          'COALESCE(SUM(likes_num),0) AS likes ' +
-          `FROM questions WHERE creator = ? AND is_deleted = 0${sinceCond}`,
+          'COALESCE(SUM(CASE WHEN q.chkState=1 THEN 1 ELSE 0 END),0) AS approved, ' +
+          'COALESCE(SUM(q.likes_num),0) AS likes ' +
+          'FROM user_upload_question uq JOIN questions q ON uq.question_id = q.id ' +
+          `WHERE uq.user_id = ? AND q.is_deleted = 0${sinceCond}`,
         statsParams,
       );
       const correctCond = since ? ' AND ctime >= ?' : '';
@@ -243,8 +244,10 @@ export default class User extends Service {
       user.correct_ques_num = points.correct;
       user.checkin_days = points.checkin;
       const stats: any = await app.mysql.query(
-        'SELECT COUNT(*) AS upload, COALESCE(SUM(likes_num),0) AS likes FROM questions WHERE creator = ? AND is_deleted = 0',
-        [ user.username ],
+        'SELECT COUNT(*) AS upload, COALESCE(SUM(q.likes_num),0) AS likes ' +
+          'FROM user_upload_question uq JOIN questions q ON uq.question_id = q.id ' +
+          'WHERE uq.user_id = ? AND q.is_deleted = 0',
+        [ targetUserId ],
       );
       user.upload_ques_num = Number(stats[0].upload) || 0;
       user.like_ques_num = Number(stats[0].likes) || 0;
@@ -319,7 +322,8 @@ export default class User extends Service {
 
     return {
       data,
-      text: md5(text),
+      // 归一化后存 md5：与 ctx.verifyCaptcha 的比对规则保持一致
+      text: md5(String(text).trim().toLowerCase()),
     };
   }
   // 获取用户上传的题目

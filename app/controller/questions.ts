@@ -8,6 +8,8 @@ export default class questions extends Controller {
     const result = await ctx.service.questions.getQuestions(ctx.request.body);
 
     if (result) {
+      // 游客隐藏答案（浏览类接口统一剔除，避免绕过详情页抓取）
+      this.stripAnswerList(result.result);
       ctx.success(result, '请求成功');
     } else {
       ctx.fail('获取题目失败~');
@@ -23,6 +25,10 @@ export default class questions extends Controller {
     }
     const result = await ctx.service.questions.getQuestionDetail({ id });
     if (result) {
+      // 游客（未登录且非管理员）隐藏答案，前端提示登录后可查看
+      if (!ctx.currentUserId() && !ctx.isAdmin()) {
+        delete (result as any).answer;
+      }
       ctx.success(result, '请求成功');
     } else {
       ctx.fail('获取题目失败~');
@@ -151,6 +157,8 @@ export default class questions extends Controller {
       ctx.request.body,
     );
     if (result) {
+      // 游客隐藏答案
+      this.stripAnswerList(result);
       ctx.success(result, '请求成功');
     } else {
       ctx.fail('抽题失败~');
@@ -162,6 +170,8 @@ export default class questions extends Controller {
     const { ctx } = this;
     const result = await ctx.service.questions.getDailyQuestions();
     if (result) {
+      // 游客隐藏答案
+      this.stripAnswerList(result);
       ctx.success(result, '请求成功');
     } else {
       ctx.fail('获取题目失败~');
@@ -252,10 +262,27 @@ export default class questions extends Controller {
     const { ctx } = this;
     const result = await ctx.service.questions.searchQuestions(ctx.request.body);
     if (result) {
+      // 游客隐藏答案
+      this.stripAnswerList(result.result);
       ctx.success(result, '请求成功');
     } else {
       ctx.fail('获取题目失败~');
     }
+  }
+  // 是否允许查看题目答案：已登录普通用户或管理员可见，游客隐藏
+  private isAnswerVisible(): boolean {
+    const { ctx } = this;
+    return Boolean(ctx.currentUserId()) || Boolean(ctx.isAdmin());
+  }
+  // 游客场景下剔除题目对象中的答案字段
+  private stripAnswerList(list: any): any {
+    if (this.isAnswerVisible() || !Array.isArray(list)) return list;
+    list.forEach((item) => {
+      if (item && typeof item === 'object') {
+        delete item.answer;
+      }
+    });
+    return list;
   }
   // 标签统计（管理员）
   public async getTagStats() {

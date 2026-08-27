@@ -17,11 +17,11 @@ function getNowFormatDate() {
   );
 }
 
-// 去除密码和电话号码
+// 去除密码（保留手机号等个人信息——该数据仅返回给本人使用）
 function removePassword(data) {
   const returnData = JSON.parse(
     JSON.stringify(data, (key, value) => {
-      if (key === 'password' || key === 'phone') {
+      if (key === 'password') {
         return undefined;
       }
       return value;

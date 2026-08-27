@@ -2,6 +2,42 @@ import { Controller } from 'egg';
 import fs from 'fs';
 import path from 'path';
 
+// 校验图片文件头（magic bytes），防止伪装扩展名的非图片内容上传
+function isImageFile(header: Buffer, ext: string): boolean {
+  // JPEG: FF D8 FF
+  if (ext === '.jpg' || ext === '.jpeg') {
+    return (
+      header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff
+    );
+  }
+  // PNG: 89 50 4E 47
+  if (ext === '.png') {
+    return (
+      header[0] === 0x89 &&
+      header[1] === 0x50 &&
+      header[2] === 0x4e &&
+      header[3] === 0x47
+    );
+  }
+  // GIF: 47 49 46 38 ("GIF8")
+  if (ext === '.gif') {
+    return (
+      header[0] === 0x47 &&
+      header[1] === 0x49 &&
+      header[2] === 0x46 &&
+      header[3] === 0x38
+    );
+  }
+  // WebP: "RIFF" .... "WEBP"
+  if (ext === '.webp') {
+    return (
+      header.toString('ascii', 0, 4) === 'RIFF' &&
+      header.toString('ascii', 8, 12) === 'WEBP'
+    );
+  }
+  return false;
+}
+
 export default class upload extends Controller {
   // 图片上传（multipart，保存到 app/public/uploads）
   public async uploadImage() {
@@ -43,6 +79,17 @@ export default class upload extends Controller {
           // 忽略删除失败
         }
         ctx.fail('图片大小不能超过 5MB~');
+        return;
+      }
+      // 校验文件真实格式（magic bytes），防止伪装扩展名的非图片内容上传
+      const header = fs.readFileSync(target).slice(0, 12);
+      if (!isImageFile(header, ext)) {
+        try {
+          fs.unlinkSync(target);
+        } catch {
+          // 忽略删除失败
+        }
+        ctx.fail('文件内容与图片格式不符~');
         return;
       }
       ctx.success({ url: `/public/uploads/${filename}` }, '上传成功');

@@ -27,4 +27,5 @@ config/config.local.ts
 app/public/uploads/
 .workbuddy/
 *.docx
-sql/
+.env*
+!.env.example

@@ -36,6 +36,8 @@ export default class paper extends Controller {
       ids: arrayIds.join(','),
       // 从 session 取组卷人，不信任前端传入；优先普通用户 session，未登录普通用户时才用管理员身份
       author: ctx.currentUsername() || ctx.currentAdminName(),
+      // 作者归属用唯一 user_id（管理员组卷时为 undefined → NULL）
+      userId: ctx.currentUserId(),
       paper_title: paperTitle,
       paper_tags: paperTags,
       purview,
@@ -52,12 +54,13 @@ export default class paper extends Controller {
   // 获取组卷列表
   public async getPaperQuestionsList() {
     const { ctx } = this;
-    const { currentPage, pageSize, author, type } = ctx.request.body;
+    const { currentPage, pageSize, type } = ctx.request.body;
     const result = await ctx.service.paper.getPaperQuestionsList({
       currentPage,
       pageSize,
-      author,
       type,
+      // 我的试卷按唯一 user_id 查询（从 session 取，忽略前端传入的 author）
+      userId: ctx.currentUserId(),
     });
     if (result) {
       ctx.success(result, '请求成功');
@@ -72,6 +75,9 @@ export default class paper extends Controller {
     const result = await ctx.service.paper.getPaperQuestionsDetail({
       paperId,
       forTest: Boolean(forTest),
+      // 服务端权限判定：游客一律隐藏；公开试卷登录用户可见，私有试卷仅作者本人或管理员可见
+      userId: ctx.currentUserId(),
+      isAdmin: ctx.isAdmin(),
     });
     if (result) {
       ctx.success(result, '请求成功');
@@ -93,7 +99,8 @@ export default class paper extends Controller {
       paperId,
       purview: target,
       chkState: target === 1 ? 0 : 1,
-      owner: ctx.currentUsername(),
+      // 作者归属判断用唯一 user_id
+      ownerId: ctx.currentUserId(),
     });
     if (result) {
       ctx.success(null, target === 1 ? '已设为公开，等待审核' : '已设为私有');
@@ -120,7 +127,8 @@ export default class paper extends Controller {
     const result = await ctx.service.paper.updatePaperQuestions({
       paperId: Number(paperId),
       ids: arrayIds.join(','),
-      owner: ctx.currentUsername(),
+      // 作者归属判断用唯一 user_id
+      ownerId: ctx.currentUserId(),
     });
     if (result) {
       const needReview = result.chkState === 0;

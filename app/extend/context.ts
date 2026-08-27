@@ -1,6 +1,7 @@
 // 配置统一返回格式 + 鉴权辅助方法
 
 import { Context } from 'egg';
+import md5 from 'md5';
 
 export default {
   success(this: Context, data: any, message = '请求成功', code = 200) {
@@ -47,6 +48,15 @@ export default {
   // 是否管理员（存在 ADMIN_SESS cookie 即视为管理员）
   isAdmin(this: Context): boolean {
     return Boolean(this.cookies.get('ADMIN_SESS', { signed: true }));
+  },
+  // 服务端校验图形验证码（一次性：校验后立即清除，防止重放）
+  // 验证码生成时只把 text 的 md5 存入 session，前端提交明文 code 在此比对
+  verifyCaptcha(this: Context, code?: string): boolean {
+    const expected = this.session?.captcha;
+    // 一次性使用，无论对错都清除，避免被重复试探
+    this.session!.captcha = null;
+    if (!expected || !code) return false;
+    return md5(String(code).trim().toLowerCase()) === expected;
   },
   // 未登录/无权限统一响应
   unauthorized(this: Context, message = '未登录或登录已过期') {

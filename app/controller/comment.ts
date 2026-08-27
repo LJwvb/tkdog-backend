@@ -47,9 +47,14 @@ export default class comment extends Controller {
   public async getCommentList() {
     const { ctx } = this;
     const { questionId, onlyApproved, currentPage, pageSize, userId } = ctx.query;
+    // 审核状态过滤不能信任调用方：仅管理员可查看未审核评论，其余一律只看已审核
+    const allowPending = ctx.isAdmin();
+    const onlyApprovedEffective = allowPending
+      ? onlyApproved === 'true' || onlyApproved === '1'
+      : true;
     const result = await ctx.service.comment.getCommentList({
       questionId,
-      onlyApproved: onlyApproved === 'true' || onlyApproved === '1',
+      onlyApproved: onlyApprovedEffective,
       currentPage,
       pageSize,
       userId,

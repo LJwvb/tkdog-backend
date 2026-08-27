@@ -5,9 +5,14 @@ export default class User extends Controller {
   // 登录
   public async login() {
     const { ctx } = this;
-    const { password, phone } = ctx.request.body;
+    const { password, phone, code } = ctx.request.body;
     if (!phone || !password) {
       ctx.fail('账号密码不能为空');
+      return;
+    }
+    // 图形验证码服务端校验（一次性）
+    if (!ctx.verifyCaptcha(code)) {
+      ctx.fail('验证码错误或已过期，请重新获取');
       return;
     }
     // 防暴力破解：按 IP 限流
@@ -26,7 +31,7 @@ export default class User extends Controller {
         last_login_time: getNowFormatDate(),
         userId: data.userId,
       });
-      // 去除密码
+      // 去除密码（保留本人手机号，前端据此识别登录态）
       const returnData = removePassword(data);
       ctx.success(returnData, '登录成功');
     } else {
@@ -83,12 +88,17 @@ export default class User extends Controller {
       ctx.fail('保存失败~');
     }
   }
-  // 重置密码（忘记密码：按手机号直接重置）
+  // 重置密码（忘记密码：按手机号 + 图形验证码重置，防止被恶意重置他人密码）
   public async resetPassword() {
     const { ctx } = this;
-    const { phone, password } = ctx.request.body;
+    const { phone, password, code } = ctx.request.body;
     if (!phone || !password) {
       ctx.fail('请填写完整信息~');
+      return;
+    }
+    // 图形验证码服务端校验（一次性），未通过验证码不允许重置
+    if (!ctx.verifyCaptcha(code)) {
+      ctx.fail('验证码错误或已过期，请重新获取');
       return;
     }
     const pwd = String(password);
@@ -106,7 +116,12 @@ export default class User extends Controller {
   // 注册
   public async register() {
     const { ctx } = this;
-    const { username, email, password, phone, sex } = ctx.request.body;
+    const { username, email, password, phone, sex, code } = ctx.request.body;
+    // 图形验证码服务端校验（一次性），防止脚本批量灌号
+    if (!ctx.verifyCaptcha(code)) {
+      ctx.fail('验证码错误或已过期，请重新获取');
+      return;
+    }
     const check = await ctx.service.sensitiveWord.check(username);
     if (check.blocked) {
       ctx.fail('用户名包含违禁词，请更换~');
@@ -124,6 +139,11 @@ export default class User extends Controller {
 
     if (!email || !password) {
       ctx.fail('账号密码不能为空');
+      return;
+    }
+    const pwd = String(password);
+    if (pwd.length < 6 || pwd.length > 16) {
+      ctx.fail('密码长度需在6-16位之间~');
       return;
     }
     if (userInfoPhone) {
@@ -151,7 +171,7 @@ export default class User extends Controller {
       ctx.fail('服务出错啦');
     }
   }
-  // 验证码
+  // 验证码（答案 md5 只存服务端 session，不下发前端比对）
   public async captcha() {
     const { ctx } = this;
     const data = await ctx.service.user.captcha(ctx.request.body);
@@ -160,7 +180,9 @@ export default class User extends Controller {
       return;
     }
     if (data?.data) {
-      ctx.success(data);
+      // 把验证码答案 md5 存入 session，由服务端统一校验
+      ctx.session.captcha = data.text;
+      ctx.success({ data: data.data });
     } else {
       ctx.fail('验证码生成失败');
     }
@@ -173,7 +195,7 @@ export default class User extends Controller {
       userId: ctx.currentUserId(),
     });
     if (result) {
-      // 去除密码
+      // 去除密码（保留本人手机号）
       const returnData = removePassword(result);
       ctx.success(returnData, '请求成功');
     } else {
