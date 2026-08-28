@@ -59,6 +59,7 @@ export default class questions extends Controller {
       ...ctx.request.body,
       // 从 session 取上传者身份，不信任前端传入；优先普通用户 session，未登录普通用户时才用管理员身份
       creator: ctx.currentUsername() || ctx.currentAdminName(),
+      creator_id: ctx.currentUserId() || ctx.currentAdminId(),
       userId: ctx.currentUserId(),
       addDate: getNowFormatDate(),
       chkState: 0,
@@ -139,6 +140,7 @@ export default class questions extends Controller {
     const result = await ctx.service.questions.importQuestions({
       questions,
       creator: ctx.currentUsername() || ctx.currentAdminName(),
+      creator_id: ctx.currentUserId() || ctx.currentAdminId(),
       // 管理员导入不写入「用户上传」关联（管理员不属于 user 表）
       userId: ctx.currentUserId(),
       isAdmin: ctx.isAdmin() && !ctx.currentUserId(),

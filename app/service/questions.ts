@@ -49,7 +49,8 @@ interface IUploadQuestions {
   difficulty: 0 | 1 | 2; // 难度 0:'简单'1:'中等'2:'困难'
   chkState?: 0 | 1 | 2; // 审核状态 0:未审核 1:审核通过 2:审核不通过
   chkRemarks?: string; // 审核备注
-  creator: string; // 创建人
+  creator: string; // 创建人（用户名，展示用）
+  creator_id?: number; // 创建人 user.userId（权限/归属判断用）
   userId?: number; // 上传者 userId（用于关联表）
 }
 
@@ -88,6 +89,7 @@ export default class questions extends Service {
           subjectID: subjectIDParams,
           is_deleted: 0,
         });
+        // catalogID 语义：0=最新（默认） 1=热门（浏览数超阈值自动提升）
         // 一次性提升热门题（浏览数超阈值），避免逐条 UPDATE
         await app.mysql.query(
           'UPDATE questions SET catalogID = 1 WHERE browses_num > 10 AND catalogID = 0 AND is_deleted = 0',
@@ -293,7 +295,7 @@ export default class questions extends Service {
   // 批量导入题目
   public async importQuestions(params) {
     const { app } = this;
-    const { userId, creator, isAdmin, questions } = params;
+    const { userId, creator, creator_id, isAdmin, questions } = params;
     try {
       if (!Array.isArray(questions) || questions.length === 0) {
         return { imported: 0 };
@@ -311,6 +313,7 @@ export default class questions extends Service {
           questionDetail: q.questionDetail,
           tags: q.tags,
           creator,
+          creator_id: creator_id ?? null,
           addDate: getNowFormatDate(),
           chkState: isAdmin ? 1 : 0,
           catalogID: 0,
