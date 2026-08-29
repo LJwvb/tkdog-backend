@@ -45,6 +45,22 @@ export default class answer extends Controller {
       );
       return;
     }
+    // 越权防护：若指定了 recordId，校验该答题记录属于当前用户，
+    // 防止传入他人 recordId 篡改别人的成绩。
+    if (recordId) {
+      const answerRec = (await ctx.app.mysql.get('answer_record', {
+        record_id: Number(recordId),
+        question_id: Number(questionId),
+      })) as any;
+      if (!answerRec) {
+        ctx.fail('答题记录不存在');
+        return;
+      }
+      if (answerRec.user_id !== ctx.currentUserId()) {
+        ctx.fail('无权操作他人的答题记录');
+        return;
+      }
+    }
     const outcome = await ctx.service.ai.judgeByQuestionId(
       Number(questionId),
       String(userAnswer ?? ''),

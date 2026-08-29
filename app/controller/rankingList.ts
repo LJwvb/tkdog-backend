@@ -4,7 +4,9 @@ export default class RankingList extends Controller {
   public async getRankingList() {
     const { ctx } = this;
     const { type } = ctx.query;
-    const result = await ctx.service.rankingList.getRankingList(type);
+    const page = Number(ctx.query.page) || 1;
+    const pageSize = Number(ctx.query.pageSize) || 20;
+    const result = await ctx.service.rankingList.getRankingList(type, page, pageSize);
     if (result) {
       ctx.success(result, '请求成功');
     } else {

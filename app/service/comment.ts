@@ -92,54 +92,107 @@ export default class comment extends Service {
     const { app } = this;
     const { questionId, onlyApproved, currentPage = 1, pageSize = 10, userId } = params || {};
     try {
-      // 头像/用户名从 user 表关联取，题目题干从 questions 表关联取，避免冗余存储
-      let sql =
-        'SELECT c.id, c.user_id, c.question_id, c.content, u.username, c.create_time, ' +
-        'c.parent_id, pu.username AS reply_username, c.status, c.is_pinned, c.images, u.avatar, q.question AS question_title ' +
-        'FROM comment c ' +
-        'LEFT JOIN user u ON c.user_id = u.userId ' +
-        'LEFT JOIN comment pc ON c.parent_id = pc.id ' +
-        'LEFT JOIN user pu ON pc.user_id = pu.userId ' +
-        'LEFT JOIN questions q ON c.question_id = q.id';
-      const where: string[] = [ 'c.is_deleted = 0' ];
-      const values: any = [];
+      const page = Number(currentPage) || 1;
+      const size = Number(pageSize) || 10;
+
+      // 顶层评论 WHERE 条件
+      const rootWhere: string[] = [ 'c.is_deleted = 0', 'c.parent_id IS NULL' ];
+      const rootValues: any = [];
       if (questionId) {
-        where.push('c.question_id = ?');
-        values.push(Number(questionId));
+        rootWhere.push('c.question_id = ?');
+        rootValues.push(Number(questionId));
       }
       if (onlyApproved) {
-        where.push('c.status = 1');
+        rootWhere.push('c.status = 1');
       }
-      if (where.length) {
-        sql += ' WHERE ' + where.join(' AND ');
-      }
-      sql += ' ORDER BY c.is_pinned DESC, c.create_time DESC';
-      const list: any = await app.mysql.query(sql, values);
-      // 点赞数 + 当前用户是否已赞
-      const likeRows: any = await app.mysql.query(
-        'SELECT comment_id, COUNT(*) AS cnt FROM comment_like GROUP BY comment_id',
+      const rootWhereSql = ' WHERE ' + rootWhere.join(' AND ');
+
+      // 1. 顶层评论总数（替代原全量查询后内存计数）
+      const totalRows: any = await app.mysql.query(
+        `SELECT COUNT(*) AS count FROM comment c${rootWhereSql}`,
+        rootValues,
       );
+      const total = Number(totalRows[0].count) || 0;
+
+      // 2. 数据库分页查顶层评论（替代原全量查 + 内存 slice）
+      const rootList: any = await app.mysql.query(
+        'SELECT c.id, c.user_id, c.question_id, c.content, u.username, c.create_time, ' +
+          'c.parent_id, c.status, c.is_pinned, c.images, u.avatar, q.question AS question_title ' +
+          'FROM comment c ' +
+          'LEFT JOIN user u ON c.user_id = u.userId ' +
+          'LEFT JOIN questions q ON c.question_id = q.id' +
+          rootWhereSql +
+          ' ORDER BY c.is_pinned DESC, c.create_time DESC LIMIT ? OFFSET ?',
+        [ ...rootValues, size, (page - 1) * size ],
+      );
+
+      if (rootList.length === 0) {
+        return { result: [], total };
+      }
+
+      const rootIds = rootList.map((c: any) => Number(c.id));
+
+      // 3. 查该题下所有回复（题目级别回复数量可控；管理端全量时不过滤 questionId）
+      const replyWhere: string[] = [ 'c.is_deleted = 0', 'c.parent_id IS NOT NULL' ];
+      const replyValues: any = [];
+      if (questionId) {
+        replyWhere.push('c.question_id = ?');
+        replyValues.push(Number(questionId));
+      }
+      if (onlyApproved) {
+        replyWhere.push('c.status = 1');
+      }
+      const replyWhereSql = ' WHERE ' + replyWhere.join(' AND ');
+      const replyList: any = await app.mysql.query(
+        'SELECT c.id, c.user_id, c.question_id, c.content, u.username, c.create_time, ' +
+          'c.parent_id, pu.username AS reply_username, c.status, c.is_pinned, c.images, u.avatar ' +
+          'FROM comment c ' +
+          'LEFT JOIN user u ON c.user_id = u.userId ' +
+          'LEFT JOIN comment pc ON c.parent_id = pc.id ' +
+          'LEFT JOIN user pu ON pc.user_id = pu.userId' +
+          replyWhereSql,
+        replyValues,
+      );
+
+      // 合并顶层评论 + 回复
+      const list = [ ...rootList, ...replyList ];
+
+      // 4. 点赞数：传了 questionId 时只查该题评论的点赞（替代原全表 GROUP BY）
       const likeMap = new Map<number, number>();
-      likeRows.forEach((r: any) => likeMap.set(r.comment_id, Number(r.cnt) || 0));
+      if (questionId) {
+        const likeRows: any = await app.mysql.query(
+          'SELECT cl.comment_id, COUNT(*) AS cnt FROM comment_like cl ' +
+            'JOIN comment c ON cl.comment_id = c.id ' +
+            'WHERE c.question_id = ? GROUP BY cl.comment_id',
+          [ Number(questionId) ],
+        );
+        likeRows.forEach((r: any) => likeMap.set(Number(r.comment_id), Number(r.cnt) || 0));
+      } else {
+        // 管理端全量评论时全表查（数据量可控）
+        const likeRows: any = await app.mysql.query(
+          'SELECT comment_id, COUNT(*) AS cnt FROM comment_like GROUP BY comment_id',
+        );
+        likeRows.forEach((r: any) => likeMap.set(Number(r.comment_id), Number(r.cnt) || 0));
+      }
+
+      // 5. 当前用户是否已赞
       const likedSet = new Set<number>();
       if (userId) {
         const liked: any = await app.mysql.query(
           'SELECT comment_id FROM comment_like WHERE user_id = ?',
           [ userId ],
         );
-        liked.forEach((r: any) => likedSet.add(r.comment_id));
+        liked.forEach((r: any) => likedSet.add(Number(r.comment_id)));
       }
+
       list.forEach((c: any) => {
-        c.like_count = likeMap.get(c.id) || 0;
-        c.is_liked = likedSet.has(c.id) ? 1 : 0;
+        c.like_count = likeMap.get(Number(c.id)) || 0;
+        c.is_liked = likedSet.has(Number(c.id)) ? 1 : 0;
       });
-      // 组装树后对顶层评论分页
-      const tree = this.buildTree(list);
-      const total = tree.length;
-      const page = Number(currentPage) || 1;
-      const size = Number(pageSize) || 10;
-      const result = tree.slice((page - 1) * size, page * size);
-      return { result, total };
+
+      // 6. 组装树，只保留当前页顶层评论的子树（过滤掉父节点不在当前页的回复）
+      const tree = this.buildTree(list).filter((node: any) => rootIds.includes(Number(node.id)));
+      return { result: tree, total };
     } catch (err) {
       return null;
     }
@@ -279,14 +332,14 @@ export default class comment extends Service {
     try {
       const result = await app.mysql.query(
         'SELECT c.id, c.user_id, c.question_id, c.content, u.username, c.create_time, ' +
-        'c.parent_id, pu.username AS reply_username, c.status, c.is_pinned, c.images, u.avatar, ' +
-        'q.question AS question_title ' +
-        'FROM comment c ' +
-        'LEFT JOIN user u ON c.user_id = u.userId ' +
-        'LEFT JOIN comment pc ON c.parent_id = pc.id ' +
-        'LEFT JOIN user pu ON pc.user_id = pu.userId ' +
-        'LEFT JOIN questions q ON c.question_id = q.id ' +
-        'WHERE c.is_deleted = 1 ORDER BY c.create_time DESC',
+          'c.parent_id, pu.username AS reply_username, c.status, c.is_pinned, c.images, u.avatar, ' +
+          'q.question AS question_title ' +
+          'FROM comment c ' +
+          'LEFT JOIN user u ON c.user_id = u.userId ' +
+          'LEFT JOIN comment pc ON c.parent_id = pc.id ' +
+          'LEFT JOIN user pu ON pc.user_id = pu.userId ' +
+          'LEFT JOIN questions q ON c.question_id = q.id ' +
+          'WHERE c.is_deleted = 1 ORDER BY c.create_time DESC',
       );
       return result;
     } catch (err) {

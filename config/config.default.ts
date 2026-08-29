@@ -1,12 +1,15 @@
 import { Context, EggAppConfig, EggAppInfo, PowerPartial } from 'egg';
+import { randomBytes } from 'crypto';
 
 export default (_appInfo: EggAppInfo) => {
   const config = {} as PowerPartial<EggAppConfig>;
 
   // override config from framework / plugin
   // use for cookie sign key, should change to your own and keep security
-  // 签名密钥从环境变量注入（默认值仅供本地演示），防止源码泄露后被伪造 ADMIN_SESS cookie
-  config.keys = process.env.COOKIE_KEYS || 'tkdog_dev_insecure_keys_change_me';
+  // 签名密钥：生产环境必须通过 COOKIE_KEYS 环境变量注入；
+  // 未设置时每次启动生成随机密钥（重启后 session 失效，仅适合本地开发），
+  // 避免硬编码弱密钥导致 ADMIN_SESS cookie 被伪造提权。
+  config.keys = process.env.COOKIE_KEYS || randomBytes(32).toString('hex');
 
   // add your egg config in here
   config.middleware = [];
@@ -42,9 +45,21 @@ export default (_appInfo: EggAppInfo) => {
     // 是否加载到 agent 上，默认关闭
     agent: false,
   };
-  // 跨域：反射请求 Origin 并允许携带凭证（前端 axios 开启了 withCredentials）
+  // 跨域：白名单模式，不再反射任意 Origin（防止恶意站点跨站请求伪造）
+  // 开发环境允许 localhost / 127.0.0.1 任意端口；生产环境通过 CORS_ORIGIN 环境变量（逗号分隔）配置
   config.cors = {
-    origin: (ctx: Context) => ctx.get('origin'),
+    origin: (ctx: Context) => {
+      const requestOrigin = ctx.get('origin');
+      if (!requestOrigin) return '';
+      if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(requestOrigin)) {
+        return requestOrigin;
+      }
+      const allowed = (process.env.CORS_ORIGIN || '')
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+      return allowed.includes(requestOrigin) ? requestOrigin : '';
+    },
     allowMethods: 'GET,HEAD,PUT,POST,DELETE,PATCH',
     credentials: true,
   };

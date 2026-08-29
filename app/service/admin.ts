@@ -64,49 +64,86 @@ export default class admin extends Service {
     const { app } = this;
     const { currentPage = 1, pageSize = 10 } = params || {};
     try {
-      const user: any = await app.mysql.query(
-        'SELECT * FROM user WHERE is_deleted = 0',
+      const page = Number(currentPage) || 1;
+      const size = Number(pageSize) || 10;
+
+      // 1. 数据库分页查用户（替代原全表查询 + 内存切片）
+      const totalRows: any = await app.mysql.query(
+        'SELECT COUNT(*) AS count FROM user WHERE is_deleted = 0',
       );
+      const total = Number(totalRows[0].count) || 0;
+      const users: any = await app.mysql.query(
+        'SELECT * FROM user WHERE is_deleted = 0 ORDER BY userId LIMIT ? OFFSET ?',
+        [ size, (page - 1) * size ],
+      );
+
+      // 2. 管理员（数量极少，全查后混入列表）
       const admin = await app.mysql.select('admin');
-      const list: any[] = [ ...admin, ...user ];
-      // 一次性按 user_id 聚合题目统计（user_upload_question 关联，避免用户名修改后统计错乱）
-      const statsRows: any = await app.mysql.query(
-        'SELECT uq.user_id, COUNT(*) AS upload_ques_num, ' +
-          'COALESCE(SUM(q.likes_num),0) AS like_ques_num, ' +
-          'COALESCE(SUM(CASE WHEN q.chkState=1 THEN 1 ELSE 0 END), 0) AS approvedNums ' +
-          'FROM user_upload_question uq JOIN questions q ON uq.question_id = q.id ' +
-          'WHERE q.is_deleted = 0 GROUP BY uq.user_id',
-      );
+
+      // 3. 当前页用户 ID 列表，用于后续批量聚合
+      const userIds = users.map((u: any) => u.userId).filter(Boolean);
+      const placeholders = userIds.length > 0 ? userIds.map(() => '?').join(',') : '';
+
+      // 4. 批量聚合：上传/审核通过/获赞统计
       const statsMap = new Map<number, any>();
-      statsRows.forEach((r: any) => statsMap.set(Number(r.user_id), r));
+      if (placeholders) {
+        const statsRows: any = await app.mysql.query(
+          'SELECT uq.user_id, COUNT(*) AS upload_ques_num, ' +
+            'COALESCE(SUM(q.likes_num),0) AS like_ques_num, ' +
+            'COALESCE(SUM(CASE WHEN q.chkState=1 THEN 1 ELSE 0 END), 0) AS approvedNums ' +
+            'FROM user_upload_question uq JOIN questions q ON uq.question_id = q.id ' +
+            `WHERE q.is_deleted = 0 AND uq.user_id IN (${placeholders}) GROUP BY uq.user_id`,
+          userIds,
+        );
+        statsRows.forEach((r: any) => statsMap.set(Number(r.user_id), r));
+      }
+
+      // 5. 批量聚合：答对题数（替代原 N+1 逐个 computePoints）
+      const correctMap = new Map<number, number>();
+      if (placeholders) {
+        const correctRows: any = await app.mysql.query(
+          `SELECT user_id, COUNT(*) AS count FROM answer_record WHERE user_id IN (${placeholders}) AND is_correct = 1 GROUP BY user_id`,
+          userIds,
+        );
+        correctRows.forEach((r: any) =>
+          correctMap.set(Number(r.user_id), Number(r.count) || 0),
+        );
+      }
+
+      // 6. 批量聚合：打卡天数
+      const checkinMap = new Map<number, number>();
+      if (placeholders) {
+        const checkinRows: any = await app.mysql.query(
+          `SELECT user_id, COUNT(*) AS count FROM checkin WHERE user_id IN (${placeholders}) GROUP BY user_id`,
+          userIds,
+        );
+        checkinRows.forEach((r: any) =>
+          checkinMap.set(Number(r.user_id), Number(r.count) || 0),
+        );
+      }
+
+      // 7. 组装列表（管理员行 + 当前页用户行）
+      const list: any[] = [ ...admin, ...users ];
       for (const item of list) {
-        // 普通用户按唯一 user_id 匹配上传统计；管理员行无 userId，不参与用户上传统计
         if (item.userId) {
           const stats = statsMap.get(Number(item.userId));
           item.upload_ques_num = Number(stats?.upload_ques_num) || 0;
           item.like_ques_num = Number(stats?.like_ques_num) || 0;
           item.approvedNums = Number(stats?.approvedNums) || 0;
+          // 积分公式与 computePoints 保持一致：上传×2 + 审核通过×5 + 答对×1 + 打卡×5
+          const correct = correctMap.get(Number(item.userId)) || 0;
+          const checkin = checkinMap.get(Number(item.userId)) || 0;
+          item.integral = item.approvedNums * 5 + item.upload_ques_num * 2 + correct + checkin * 5;
         } else {
           item.upload_ques_num = 0;
           item.like_ques_num = 0;
           item.approvedNums = 0;
-        }
-        // 普通用户积分用与用户端完全一致的 computePoints 实时计算（上传×2 + 审核通过×5 + 答对×1 + 打卡×5）
-        if (item.userId) {
-          const points = await this.service.user.computePoints(item.userId);
-          item.integral = points.integral;
-        } else {
-          // 管理员行无积分
           item.integral = 0;
         }
         // 不向前端暴露密码
         delete item.password;
       }
-      const total = list.length;
-      const page = Number(currentPage) || 1;
-      const size = Number(pageSize) || 10;
-      const result = list.slice((page - 1) * size, page * size);
-      return { result, total };
+      return { result: list, total };
     } catch (err) {
       return null;
     }

@@ -415,11 +415,18 @@ export default class questions extends Service {
   }
   // 每日一题
   public async getDailyQuestions() {
-    // 从所有已审核的题目中随机获取1道题目
+    // 用 COUNT + 随机偏移替代 ORDER BY rand()，避免全表排序
     const { app } = this;
     try {
+      const countRows: any = await app.mysql.query(
+        'SELECT COUNT(*) AS c FROM questions WHERE chkState = 1 AND is_deleted = 0',
+      );
+      const total = Number(countRows[0]?.c) || 0;
+      if (total === 0) return [];
+      const offset = Math.floor(Math.random() * total);
       const result = await app.mysql.query(
-        'select * from questions where chkState = 1 and is_deleted = 0 order by rand() limit 1',
+        'SELECT * FROM questions WHERE chkState = 1 AND is_deleted = 0 LIMIT 1 OFFSET ?',
+        [ offset ],
       );
       return result;
     } catch (err) {
@@ -440,9 +447,17 @@ export default class questions extends Service {
       if (!current) return [];
 
       // 候选集：同科目或标签/关键词可能相关的已审核题目（缩小扫描范围）
-      const all: any = await app.mysql.query(
-        'select * from questions where chkState = 1 and is_deleted = 0',
+      let all: any = await app.mysql.query(
+        'SELECT * FROM questions WHERE chkState = 1 AND is_deleted = 0 AND subjectID = ? LIMIT 200',
+        [ current.subjectID ],
       );
+      if (all.length < 10) {
+        const extra: any = await app.mysql.query(
+          'SELECT * FROM questions WHERE chkState = 1 AND is_deleted = 0 AND subjectID != ? LIMIT 200',
+          [ current.subjectID ],
+        );
+        all = [ ...all, ...extra ];
+      }
 
       // 当前题目的标签集合 + 技术关键词集合
       const currentTags = new Set(

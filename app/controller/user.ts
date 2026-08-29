@@ -1,4 +1,4 @@
-import { Controller } from 'egg';
+﻿import { Controller } from 'egg';
 import { getNowFormatDate, removePassword } from '../utils';
 
 export default class User extends Controller {
@@ -94,6 +94,11 @@ export default class User extends Controller {
     const { phone, password, code } = ctx.request.body;
     if (!phone || !password) {
       ctx.fail('请填写完整信息~');
+      return;
+    }
+    // 按 IP 限流，防止恶意重置任意账号密码
+    if (ctx.service.user.isLoginRateLimited(ctx.ip)) {
+      ctx.fail('操作过于频繁，请稍后再试~');
       return;
     }
     // 图形验证码服务端校验（一次性），未通过验证码不允许重置
@@ -205,9 +210,24 @@ export default class User extends Controller {
   // 编辑信息
   public async updateUserInfo() {
     const { ctx } = this;
-    const body = ctx.request.body;
+    const body = ctx.request.body || {};
+    // 字段白名单：仅允许修改这些字段，防止 mass assignment 篡改 is_deleted/phone/password 等
+    const allowedFields = [
+      'username',
+      'avatar',
+      'personalIntroduction',
+      'sex',
+      'email',
+      'daily_goal',
+    ];
+    const updateData: any = {};
+    for (const key of allowedFields) {
+      if (body[key] !== undefined) {
+        updateData[key] = body[key];
+      }
+    }
     const check = await ctx.service.sensitiveWord.check(
-      [ body?.username, body?.personalIntroduction ].filter(Boolean).join(' '),
+      [ updateData.username, updateData.personalIntroduction ].filter(Boolean).join(' '),
     );
     if (check.blocked) {
       ctx.fail('用户名或简介包含违禁词，请修改后重试~');
@@ -215,7 +235,7 @@ export default class User extends Controller {
     }
     // 从 session 取当前登录用户 ID，只允许修改自己的信息
     const result = await ctx.service.user.updateUserInfo({
-      ...body,
+      ...updateData,
       userId: ctx.currentUserId(),
     });
     if (result) {

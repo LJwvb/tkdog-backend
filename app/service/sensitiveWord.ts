@@ -2,22 +2,40 @@
 import { Service } from 'egg';
 import { getNowFormatDate } from '../utils';
 
+// 敏感词内存缓存（单进程内有效，多进程部署需换 Redis 或定时刷新）
+// 避免每次评论/上传/编辑资料都全表查询敏感词表
+let cachedWords: Array<{ word: string; level: number }> | null = null;
+
 export default class sensitiveWord extends Service {
+  // 从数据库重新加载敏感词到内存缓存
+  private async loadCache(): Promise<Array<{ word: string; level: number }>> {
+    const { app } = this;
+    const rows: any = await app.mysql.query(
+      'SELECT word, level FROM sensitive_word WHERE is_deleted = 0',
+    );
+    cachedWords = rows.map((r: any) => ({
+      word: String(r.word).toLowerCase(),
+      level: Number(r.level),
+    }));
+    return cachedWords!;
+  }
+
+  // 失效缓存（增删改敏感词后调用）
+  private invalidateCache() {
+    cachedWords = null;
+  }
+
   // 检测文本：blocked=命中「直接拦截」词，review=命中「待审核」词（忽略大小写）
   public async check(text: string): Promise<{ blocked: boolean; review: boolean }> {
-    const { app } = this;
     let blocked = false;
     let review = false;
     if (!text) return { blocked, review };
     const lower = text.toLowerCase();
     try {
-      const words: any = await app.mysql.query(
-        'SELECT * FROM sensitive_word WHERE is_deleted = 0',
-      );
+      const words = cachedWords ?? (await this.loadCache());
       for (const w of words) {
-        const word = String(w.word).toLowerCase();
-        if (word && lower.includes(word)) {
-          if (Number(w.level) === 2) {
+        if (w.word && lower.includes(w.word)) {
+          if (w.level === 2) {
             review = true;
           } else {
             blocked = true;
@@ -70,6 +88,7 @@ export default class sensitiveWord extends Service {
         level: Number(level) === 2 ? 2 : 1,
         ctime: getNowFormatDate(),
       });
+      this.invalidateCache();
       return { success: true, id: result.insertId };
     } catch (err) {
       return null;
@@ -84,6 +103,7 @@ export default class sensitiveWord extends Service {
         { is_deleted: 1 },
         { where: { id } },
       );
+      this.invalidateCache();
       return result;
     } catch (err) {
       return null;
@@ -117,6 +137,7 @@ export default class sensitiveWord extends Service {
         { is_deleted: 0 },
         { where: { id } },
       );
+      this.invalidateCache();
       return result;
     } catch (err) {
       return null;

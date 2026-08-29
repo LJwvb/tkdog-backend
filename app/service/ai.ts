@@ -63,6 +63,17 @@ export default class ai extends Service {
     }
     arr.push(now);
     rateWindows.set(key, arr);
+    // 定期清理过期 key，防止长期运行内存增长
+    if (rateWindows.size > 1000) {
+      for (const [k, v] of rateWindows) {
+        const fresh = v.filter(t => now - t < windowMs);
+        if (fresh.length === 0) {
+          rateWindows.delete(k);
+        } else {
+          rateWindows.set(k, fresh);
+        }
+      }
+    }
     return false;
   }
 

@@ -45,6 +45,17 @@ export default class User extends Service {
     }
     arr.push(now);
     loginWindows.set(key, arr);
+    // 定期清理过期 key，防止长期运行内存增长（单进程内存限流）
+    if (loginWindows.size > 500) {
+      for (const [k, v] of loginWindows) {
+        const fresh = v.filter(t => now - t < windowMs);
+        if (fresh.length === 0) {
+          loginWindows.delete(k);
+        } else {
+          loginWindows.set(k, fresh);
+        }
+      }
+    }
     return false;
   }
 
