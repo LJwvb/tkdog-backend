@@ -102,6 +102,18 @@ export default class admin extends Controller {
       ctx.fail('获取题目失败~');
     }
   }
+  // 管理端题目搜索（支持题干/题型/难度/状态等条件，覆盖全部状态）
+  public async searchQuestions() {
+    const { ctx } = this;
+    const result = await ctx.service.admin.searchAdminQuestions(
+      ctx.request.body
+    );
+    if (result) {
+      ctx.success(result, '请求成功');
+    } else {
+      ctx.fail('搜索题目失败~');
+    }
+  }
   // 审核题目
   public async chkQuestions() {
     const { ctx } = this;

@@ -142,6 +142,11 @@ export default (app: Application) => {
     adminAuth,
     controller.admin.getAllChkQuestions
   );
+  router.post(
+    '/searchAdminQuestions',
+    adminAuth,
+    controller.admin.searchQuestions
+  );
   router.post('/chkQuestions', adminAuth, controller.admin.chkQuestions);
   router.post('/deleteQuestions', adminAuth, controller.admin.deleteQuestions);
   router.post('/updateQuestion', authOrAdmin, controller.questions.updateQuestion);

@@ -320,6 +320,80 @@ export default class admin extends Service {
       return null;
     }
   }
+  // 管理端题目搜索：题干关键词/题型/难度/科目/标签/审核状态/删除状态 组合筛选
+  // 仅挂在 adminAuth 路由下使用，可检索待审核、已审核、不通过及已删除题目
+  public async searchAdminQuestions(params) {
+    const { app } = this;
+    const {
+      keyword,
+      questionType,
+      difficulty,
+      subjectID,
+      tags,
+      chkState,
+      isDeleted,
+      currentPage = 1,
+      pageSize = 10,
+    } = params;
+
+    try {
+      const where: string[] = [];
+      const values: any[] = [];
+      const notEmpty = (v: unknown) =>
+        v !== undefined && v !== null && String(v).trim() !== '';
+
+      if (notEmpty(keyword)) {
+        where.push('question like ?');
+        values.push(`%${String(keyword).trim()}%`);
+      }
+      if (questionType !== undefined && questionType !== null && questionType !== '') {
+        where.push('questionType = ?');
+        values.push(questionType);
+      }
+      if (difficulty !== undefined && difficulty !== null && difficulty !== '') {
+        where.push('difficulty = ?');
+        values.push(difficulty);
+      }
+      if (subjectID !== undefined && subjectID !== null && subjectID !== '') {
+        where.push('subjectID = ?');
+        values.push(Number(subjectID));
+      }
+      if (notEmpty(tags)) {
+        where.push('tags like ?');
+        values.push(`%${String(tags).trim()}%`);
+      }
+      // 审核状态：0 待审核 / 1 已审核 / 2 不通过；空则不限
+      if (chkState !== undefined && chkState !== null && chkState !== '') {
+        where.push('chkState = ?');
+        values.push(Number(chkState));
+      }
+      // 删除状态：0 未删除 / 1 已删除；空则不限（含已删除）
+      if (isDeleted === 0 || isDeleted === '0') {
+        where.push('is_deleted = 0');
+      } else if (isDeleted === 1 || isDeleted === '1') {
+        where.push('is_deleted = 1');
+      }
+      if (where.length === 0) {
+        where.push('1 = 1');
+      }
+
+      const whereSql = where.join(' and ');
+      const page = Number(pageSize) || 10;
+      const offset = (Number(currentPage) - 1) * page;
+
+      const result = await app.mysql.query(
+        `select * from questions where ${whereSql} order by id desc limit ${page} offset ${offset}`,
+        values,
+      );
+      const totalRows = await app.mysql.query(
+        `select count(*) as count from questions where ${whereSql}`,
+        values,
+      );
+      return { result, total: totalRows[0].count };
+    } catch (err) {
+      return null;
+    }
+  }
   // 审核题目
   public async chkQuestions(params: IChkQuestions) {
     const { app } = this;
@@ -417,38 +491,66 @@ export default class admin extends Service {
       return null;
     }
   }
-  // 所有未审核的试卷
+  // 组装试卷列表查询条件：基础状态条件 + 可选 keyword（试卷名称/标签模糊匹配，参数化查询）
+  private buildPaperWhere(keyword: unknown, base: string) {
+    const where: string[] = [ base ];
+    const values: any[] = [];
+    if (
+      keyword !== undefined &&
+      keyword !== null &&
+      String(keyword).trim() !== ''
+    ) {
+      const kw = `%${String(keyword).trim()}%`;
+      where.push('(paper_title like ? or paper_tags like ?)');
+      values.push(kw, kw);
+    }
+    return { whereSql: where.join(' and '), values };
+  }
+
+  // 所有未审核的试卷（支持 keyword 按试卷名称/标签搜索）
   public async getNoChkPaper(params) {
     const { app } = this;
-    const { currentPage, pageSize } = params;
+    const { currentPage, pageSize, keyword } = params;
     try {
-      const result: any = await app.mysql.select('examination_paper', {
-        where: { chkState: 0 },
-        limit: pageSize,
-        offset: (currentPage - 1) * pageSize,
-      });
+      const { whereSql, values } = this.buildPaperWhere(
+        keyword,
+        'chkState = 0 and is_deleted = 0',
+      );
+      const result: any = await app.mysql.query(
+        `select * from examination_paper where ${whereSql} order by paper_id desc limit ${Number(
+          pageSize,
+        )} offset ${(Number(currentPage) - 1) * Number(pageSize)}`,
+        values,
+      );
       // 获取所有未审核题目总数
       const count = await app.mysql.query(
-        'select count(*) as count from examination_paper where chkState = 0'
+        `select count(*) as count from examination_paper where ${whereSql}`,
+        values,
       );
       return { result, total: count[0].count };
     } catch (err) {
       return null;
     }
   }
-  // 所有已审核的试卷
+  // 所有已审核的试卷（支持 keyword 按试卷名称/标签搜索）
   public async getAllChkPaper(params) {
     const { app } = this;
-    const { currentPage, pageSize } = params;
+    const { currentPage, pageSize, keyword } = params;
     try {
-      const result = await app.mysql.select('examination_paper', {
-        where: { chkState: 1 },
-        limit: pageSize,
-        offset: (currentPage - 1) * pageSize,
-      });
+      const { whereSql, values } = this.buildPaperWhere(
+        keyword,
+        'chkState = 1 and is_deleted = 0',
+      );
+      const result: any = await app.mysql.query(
+        `select * from examination_paper where ${whereSql} order by paper_id desc limit ${Number(
+          pageSize,
+        )} offset ${(Number(currentPage) - 1) * Number(pageSize)}`,
+        values,
+      );
       // 获取所有已审核题目总数
       const count = await app.mysql.query(
-        'select count(*) as count from examination_paper where chkState = 1'
+        `select count(*) as count from examination_paper where ${whereSql}`,
+        values,
       );
       return { result, total: count[0].count };
     } catch (err) {
@@ -530,20 +632,23 @@ export default class admin extends Service {
       return null;
     }
   }
-  // 已删除试卷列表
+  // 已删除试卷列表（支持 keyword 按试卷名称/标签搜索）
   public async getDeletedPapers(params) {
     const { app } = this;
-    const { currentPage = 1, pageSize = 10 } = params || {};
+    const { currentPage = 1, pageSize = 10, keyword } = params || {};
     try {
-      const result = await app.mysql.select('examination_paper', {
-        where: { is_deleted: 1 },
-        limit: pageSize,
-        offset: (currentPage - 1) * pageSize,
-      });
-      const count = await app.mysql.count('examination_paper', {
-        is_deleted: 1,
-      });
-      return { result, total: count };
+      const { whereSql, values } = this.buildPaperWhere(keyword, 'is_deleted = 1');
+      const result: any = await app.mysql.query(
+        `select * from examination_paper where ${whereSql} order by paper_id desc limit ${Number(
+          pageSize,
+        )} offset ${(Number(currentPage) - 1) * Number(pageSize)}`,
+        values,
+      );
+      const count = await app.mysql.query(
+        `select count(*) as count from examination_paper where ${whereSql}`,
+        values,
+      );
+      return { result, total: count[0].count };
     } catch (err) {
       return null;
     }

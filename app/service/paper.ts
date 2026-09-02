@@ -33,22 +33,39 @@ export default class paper extends Service {
   // 获取组卷列表
   public async getPaperQuestionsList(params) {
     const { app } = this;
-    const { type, userId } = params;
+    const { type, userId, keyword } = params;
+    // 分页参数：默认第 1 页每页 12 条，单页上限 50 防止一次拉太多
+    const page = Math.max(1, Number(params.currentPage) || 1);
+    const size = Math.min(50, Math.max(1, Number(params.pageSize) || 12));
+    const offset = (page - 1) * size;
+    // 关键词搜索（标题或标签），走 SQL 过滤而不是前端过滤已加载的那几页
+    const kw = typeof keyword === 'string' ? keyword.trim() : '';
+    const kwCond = kw ? ' AND (paper_title LIKE ? OR paper_tags LIKE ?)' : '';
+    const kwParams = kw ? [ `%${kw}%`, `%${kw}%` ] : [];
     try {
       if (type === 'all') {
-        // 获取所有组卷（未删除）
-        const result: any = await app.mysql.query(
-          'select * from examination_paper where is_deleted = 0 order by paper_id desc',
-        );
-        const purviewPaper = result.filter((item: any) => item.purview === -1); // 官方的试卷
-        const personPaper = result.filter(
-          (item: any) => item.purview === 1 && item?.chkState === 1,
-        ); // 个人审核通过公开的试卷
-
-        return {
-          purviewPaper,
-          personPaper,
-        };
+        // 两个分组各自分页，替代原「全表查询 + 前端一次性渲染」
+        // purviewPaper：官方试卷（purview = -1）
+        // personPaper：个人公开且审核通过（purview = 1 且 chkState = 1）
+        const groups = [
+          { key: 'purviewPaper', where: 'purview = -1' },
+          { key: 'personPaper', where: 'purview = 1 AND chkState = 1' },
+        ];
+        const result: any = {};
+        for (const g of groups) {
+          const countRows: any = await app.mysql.query(
+            `SELECT COUNT(*) AS total FROM examination_paper WHERE is_deleted = 0 AND ${g.where}${kwCond}`,
+            kwParams,
+          );
+          const total = Number(countRows?.[0]?.total) || 0;
+          const list: any = await app.mysql.query(
+            `SELECT * FROM examination_paper WHERE is_deleted = 0 AND ${g.where}${kwCond} ` +
+              'ORDER BY paper_id DESC LIMIT ? OFFSET ?',
+            [ ...kwParams, size, offset ],
+          );
+          result[g.key] = { list, total, currentPage: page, pageSize: size };
+        }
+        return result;
       }
       // 我的试卷（按唯一 user_id，避免用户名修改后查不到自己的试卷）
       const result: any = await app.mysql.query(
