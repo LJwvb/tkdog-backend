@@ -24,6 +24,31 @@ export default class comment extends Controller {
       ctx.fail('评论包含违禁词，请文明发言~');
       return;
     }
+    // AI 智能审核：明显违规直接拒绝，疑似违规（嘲讽/引战）进入待审核
+    const aiCheck = await ctx.service.ai.checkContent(content, 'comment');
+    if (!aiCheck.passed) {
+      // 明显违规（广告/辱骂/色情/政治）直接拒绝
+      if ([ 'ad', 'abuse', 'porn', 'political' ].includes(aiCheck.category || '')) {
+        ctx.fail(aiCheck.reason ? `评论未通过审核：${aiCheck.reason}` : '评论内容违规，请文明发言~');
+        return;
+      }
+      // 疑似违规（嘲讽/引战/其他）进入待审核，管理员人工确认
+      const result = await ctx.service.comment.addComment({
+        content,
+        questionId: Number(questionId),
+        parentId,
+        replyUsername,
+        images: imageList,
+        userId: ctx.currentUserId(),
+        status: 0,
+      });
+      if (result) {
+        ctx.success(null, '评论已提交，审核通过后展示~');
+      } else {
+        ctx.fail('评论失败~');
+      }
+      return;
+    }
     // 从 session 取当前登录用户 ID，不信任前端传入
     const result = await ctx.service.comment.addComment({
       content,

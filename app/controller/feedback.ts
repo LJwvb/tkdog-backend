@@ -15,6 +15,12 @@ export default class feedback extends Controller {
       ctx.fail('反馈内容包含违禁词，请文明发言~');
       return;
     }
+    // AI 智能审核：识别广告、辱骂等违规反馈，明显违规直接拦截
+    const aiCheck = await ctx.service.ai.checkContent(content, 'feedback');
+    if (!aiCheck.passed && [ 'ad', 'abuse', 'porn', 'political' ].includes(aiCheck.category || '')) {
+      ctx.fail(aiCheck.reason ? `反馈未通过审核：${aiCheck.reason}` : '反馈内容违规，请文明提交~');
+      return;
+    }
     const result = await ctx.service.feedback.submitFeedback({
       questionId,
       type: type || 'error',

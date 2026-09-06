@@ -209,6 +209,51 @@ export default class answer extends Controller {
     }
   }
 
+  // AI 答题提示：只给解题思路，不直接给答案（缓存命中不扣额度）
+  public async aiHint() {
+    const { ctx } = this;
+    const { questionId } = ctx.request.body;
+    if (!questionId) {
+      ctx.fail('questionId不能为空~');
+      return;
+    }
+    if (!ctx.service.ai.isConfigured()) {
+      ctx.success({ available: false, message: 'AI 未配置' }, '请求成功');
+      return;
+    }
+    if (ctx.service.ai.isRateLimited(ctx.currentUserId())) {
+      ctx.success(
+        { available: false, message: 'AI 请求过于频繁，请稍后再试' },
+        '请求成功',
+      );
+      return;
+    }
+    // 缓存命中不扣额度：只查独立的 hint 字段（不含答案），不能复用 thinking
+    const cached: any = await ctx.app.mysql.get('ai_analysis', { question_id: Number(questionId) });
+    if (cached?.hint) {
+      ctx.success({ available: true, hint: String(cached.hint), fromCache: true }, 'AI 提示（缓存）');
+      return;
+    }
+    // 额度检查
+    const hasCreditH = await ctx.service.ai.consumeCredit(ctx.currentUserId(), 1);
+    if (!hasCreditH) {
+      ctx.success(
+        { available: false, message: 'AI 额度不足，可用积分兑换' },
+        '请求成功',
+      );
+      return;
+    }
+    const result = await ctx.service.ai.getHint(Number(questionId));
+    if (result) {
+      ctx.success({ available: true, ...result }, 'AI 提示完成');
+    } else {
+      ctx.success(
+        { available: false, message: 'AI 提示生成失败，请稍后重试' },
+        '请求成功',
+      );
+    }
+  }
+
   // AI 整卷分析报告：基于交卷记录生成整卷报告（带缓存）
   public async aiPaperReport() {
     const { ctx } = this;

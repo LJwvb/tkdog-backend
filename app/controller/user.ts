@@ -22,6 +22,10 @@ export default class User extends Controller {
     }
     const data = await ctx.service.user.login({ password, phone });
 
+    if ((data as any)?.deleted) {
+      ctx.fail('账号因违规已被限制登录, 无法继续使用');
+      return;
+    }
     if (data) {
       // 设置 session（后端鉴权依据，前端不可篡改）。
       // 只写普通用户身份，不动管理员的 ADMIN_SESS cookie，两者可在同一浏览器并存。

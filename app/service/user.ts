@@ -63,12 +63,15 @@ export default class User extends Service {
   public async login(params: LoginParams) {
     const { app } = this;
     try {
-      // 先按手机号查用户，再校验密码（bcrypt + 旧 md5 兼容）
+      // 先按手机号查用户（不限制 is_deleted，以便区分"不存在"和"已删除"）
       const result: any = await app.mysql.get('user', {
         phone: params.phone,
-        is_deleted: 0,
       });
       if (!result) return null;
+      // 已删除账号：返回特殊标记，提示因违规被删除
+      if (result.is_deleted === 1 || result.is_deleted === '1') {
+        return { deleted: true };
+      }
 
       let passwordOk = false;
       try {

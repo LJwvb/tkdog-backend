@@ -94,9 +94,10 @@ export default (app: Application) => {
   router.post('/submitPaper', auth, controller.answer.submitPaper);
   // AI 批改简答题（主观题）
   router.post('/aiJudgeAnswer', auth, controller.answer.aiJudgeAnswer);
-router.post('/aiJudgeBatch', auth, controller.answer.aiJudgeBatch);
+  router.post('/aiJudgeBatch', auth, controller.answer.aiJudgeBatch);
   // AI 解题解析
   router.post('/aiAnalyze', auth, controller.answer.aiAnalyze);
+  router.post('/aiHint', auth, controller.answer.aiHint);
   router.post('/aiPaperReport', auth, controller.answer.aiPaperReport);
   router.post('/aiLearningReport', auth, controller.user.aiLearningReport);
   router.post('/exchangeAiCredit', auth, controller.user.exchangeAiCredit);
