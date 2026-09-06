@@ -460,40 +460,46 @@ export default class admin extends Service {
   public async chkQuestions(params: IChkQuestions) {
     const { app } = this;
     try {
-      const result = await app.mysql.update(
-        'questions',
-        { chkState: params.chkState, chkRemarks: params.chkRemarks || null },
-        { where: { id: params.id } },
-      );
-      // 统计字段（获赞/上传/审核通过数）已改为实时计算，无需在此维护冗余字段
-      // 审核结果通知上传者
+      // 先取出审核结果通知所需数据（事务外只读）
       const question: any = await app.mysql.get('questions', { id: params.id });
-      if (question) {
-        const upload: any = await app.mysql.get('user_upload_question', {
-          question_id: params.id,
-        });
-        if (upload?.user_id) {
-          const stateText =
-            Number(params.chkState) === 1
-              ? '审核通过'
-              : Number(params.chkState) === 2
-                ? '审核不通过'
-                : '待审核';
-          // 审核通过 +5 积分（落库）
-          if (Number(params.chkState) === 1) {
-            await app.mysql.query('UPDATE user SET integral = integral + 5 WHERE userId = ?', [upload.user_id]);
-          }
-          // 审核建议：与默认状态文案相同时不再重复拼接，自定义建议才附上并通知用户
-          const remark = String(params.chkRemarks || '').trim();
-          const remarkText =
-            remark && remark !== stateText ? `，审核建议：${remark}` : '';
-          await this.service.notification.create({
-            userId: upload.user_id,
-            type: 'question_review',
-            title: `题目${stateText}`,
-            content: `你上传的题目「${question.question || ''}」${stateText}${remarkText}`,
-          });
+      const upload: any = question
+        ? await app.mysql.get('user_upload_question', { question_id: params.id })
+        : null;
+      // 事务：审核状态写入 + 上传者积分同步（要么都成功，要么都不变）
+      const conn = await app.mysql.beginTransaction();
+      let result: any;
+      try {
+        result = await conn.update(
+          'questions',
+          { chkState: params.chkState, chkRemarks: params.chkRemarks || null },
+          { where: { id: params.id } },
+        );
+        if (upload?.user_id && Number(params.chkState) === 1) {
+          await conn.query('UPDATE user SET integral = integral + 5 WHERE userId = ?', [ upload.user_id ]);
         }
+        await conn.commit();
+      } catch (err) {
+        await conn.rollback();
+        throw err;
+      }
+
+      // 通知上传者（事务已提交；通知失败不影响审核落库，下次登录仍可在消息中心看到）
+      if (question && upload?.user_id) {
+        const stateText =
+          Number(params.chkState) === 1
+            ? '审核通过'
+            : Number(params.chkState) === 2
+              ? '审核不通过'
+              : '待审核';
+        const remark = String(params.chkRemarks || '').trim();
+        const remarkText =
+          remark && remark !== stateText ? `，审核建议：${remark}` : '';
+        await this.service.notification.create({
+          userId: upload.user_id,
+          type: 'question_review',
+          title: `题目${stateText}`,
+          content: `你上传的题目「${question.question || ''}」${stateText}${remarkText}`,
+        });
       }
       return result;
     } catch (err) {

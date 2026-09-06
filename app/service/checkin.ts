@@ -31,8 +31,14 @@ export default class checkin extends Service {
         },
         { where: { userId } },
       );
+      // 同步写 checkin 明细表：排行榜（周/月榜）按此表聚合打卡天数，
+      // 之前停写后导致 rankingList 统计恒为 0。唯一键 uk_user_date 保证同日不重复。
+      await app.mysql.query(
+        'INSERT IGNORE INTO checkin (user_id, checkin_date, ctime) VALUES (?, ?, NOW())',
+        [ userId, today ],
+      );
       // 打卡 +5 积分
-      await app.mysql.query('UPDATE user SET integral = integral + 5 WHERE userId = ?', [userId]);
+      await app.mysql.query('UPDATE user SET integral = integral + 5 WHERE userId = ?', [ userId ]);
       return { already: false, consecutive };
     } catch (err) {
       return null;

@@ -314,29 +314,29 @@ export default class comment extends Service {
       return null;
     }
   }
-  // 点赞评论
+  // 点赞评论（INSERT IGNORE 保证幂等：重复点赞不会因主键冲突抛错，返回 {added} 让前端区分）
   public async likeComment(userId: number, commentId: number) {
     const { app } = this;
     try {
-      const result = await app.mysql.insert('comment_like', {
-        user_id: userId,
-        comment_id: commentId,
-        create_time: new Date(),
-      });
-      return result;
+      const result: any = await app.mysql.query(
+        'INSERT IGNORE INTO comment_like (user_id, comment_id, create_time) VALUES (?, ?, NOW())',
+        [ userId, commentId ],
+      );
+      // affectedRows：1 = 新插入；0 = 已存在被 IGNORE 跳过（视作幂等成功但 added=false）
+      return { added: Number(result.affectedRows) === 1 };
     } catch (err) {
       return null;
     }
   }
-  // 取消点赞评论
+  // 取消点赞评论（基于 affectedRows 判断是否真删了一条）
   public async unlikeComment(userId: number, commentId: number) {
     const { app } = this;
     try {
-      const result = await app.mysql.delete('comment_like', {
+      const result: any = await app.mysql.delete('comment_like', {
         user_id: userId,
         comment_id: commentId,
       });
-      return result;
+      return { removed: Number(result.affectedRows) >= 1 };
     } catch (err) {
       return null;
     }

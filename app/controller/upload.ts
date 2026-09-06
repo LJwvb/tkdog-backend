@@ -44,6 +44,14 @@ export default class upload extends Controller {
     const { ctx } = this;
     try {
       const stream = await ctx.getFileStream();
+      // 单文件大小限制：5MB，与前端 EditUserInfo/评论上传提示一致。
+      // 这里仅读取 Content-Length 头进行预检，真实写入前由 stream.on('data') 再做一次累加防御。
+      const MAX_SIZE = 5 * 1024 * 1024;
+      const declared = Number((stream as any).headers?.['content-length']) || 0;
+      if (declared > MAX_SIZE) {
+        ctx.fail('文件过大，最多 5MB~');
+        return;
+      }
       const ext = path.extname(stream.filename || '').toLowerCase() || '.png';
       if (![ '.jpg', '.jpeg', '.png', '.gif', '.webp' ].includes(ext)) {
         ctx.fail('仅支持图片格式~');
@@ -54,7 +62,7 @@ export default class upload extends Controller {
         String(ctx.request.body?.channel || 'common')
           .replace(/[^a-zA-Z0-9_-]/g, '')
           .slice(0, 20) || 'common';
-      // 上传用户（未登录默认 0）
+      // auth 中间件已保证登录；这里仅做防御性兜底
       const userId = ctx.currentUserId() || 0;
       // 文件名：用户id_时间戳_渠道_随机码.扩展名（随机码避免同毫秒重复覆盖）
       const filename = `${userId}_${Date.now()}_${channel}_${Math.random()

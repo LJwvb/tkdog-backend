@@ -270,35 +270,44 @@ export default class answer extends Service {
       // 客观题得分合计（整数）；主观题待 AI 批改后由 applyAiGrade 累加
       const score = detail.reduce((sum, d) => sum + (d.score || 0), 0);
 
-      const recordRes: any = await app.mysql.insert('paper_record', {
-        user_id: userId,
-        paper_id: paperId,
-        score,
-        question_num: questionNum,
-        correct_num: correctNum,
-        wrong_num: wrongNum,
-        subjective_num: subjectiveNum,
-        ctime: getNowFormatDate(),
-      });
-      const recordId = recordRes.insertId;
-
-      for (const d of detail) {
-        await app.mysql.insert('answer_record', {
-          record_id: recordId,
+      let recordId: number = 0;
+      const conn = await app.mysql.beginTransaction();
+      try {
+        const recordRes: any = await conn.insert('paper_record', {
           user_id: userId,
           paper_id: paperId,
-          question_id: d.questionId,
-          user_answer: d.userAnswer,
-          is_correct: d.isCorrect,
-          score: d.score,
-          max_score: d.maxScore,
+          score,
+          question_num: questionNum,
+          correct_num: correctNum,
+          wrong_num: wrongNum,
+          subjective_num: subjectiveNum,
           ctime: getNowFormatDate(),
         });
-      }
+        recordId = recordRes.insertId;
 
-      // 客观题答对 +1 积分/题（落库），主观题答对后由 AI 批改时加分
-      if (correctNum > 0) {
-        await app.mysql.query('UPDATE user SET integral = integral + ? WHERE userId = ?', [correctNum, userId]);
+        for (const d of detail) {
+          await conn.insert('answer_record', {
+            record_id: recordId,
+            user_id: userId,
+            paper_id: paperId,
+            question_id: d.questionId,
+            user_answer: d.userAnswer,
+            is_correct: d.isCorrect,
+            score: d.score,
+            max_score: d.maxScore,
+            ctime: getNowFormatDate(),
+          });
+        }
+
+        // 客观题答对 +1 积分/题（落库），主观题答对后由 AI 批改时加分
+        if (correctNum > 0) {
+          await conn.query('UPDATE user SET integral = integral + ? WHERE userId = ?', [ correctNum, userId ]);
+        }
+        await conn.commit();
+      } catch (err) {
+        // 任一步失败回滚：避免半成品答题记录与积分错乱
+        await conn.rollback();
+        throw err;
       }
 
       return {

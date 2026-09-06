@@ -82,7 +82,8 @@ export default class comment extends Controller {
     }
     const result = await ctx.service.comment.likeComment(userId, Number(commentId));
     if (result) {
-      ctx.success(null, '点赞成功~');
+      // 透传 { added }：true=真新增点赞；false=已点过（幂等），前端不应再 +1
+      ctx.success(result, '点赞成功~');
     } else {
       ctx.fail('点赞失败~');
     }
@@ -102,7 +103,8 @@ export default class comment extends Controller {
     }
     const result = await ctx.service.comment.unlikeComment(userId, Number(commentId));
     if (result) {
-      ctx.success(null, '已取消点赞~');
+      // 透传 { removed }：true=真删了一条；false=本来就没点（幂等）
+      ctx.success(result, '已取消点赞~');
     } else {
       ctx.fail('取消失败~');
     }

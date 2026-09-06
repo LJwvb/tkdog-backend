@@ -159,27 +159,34 @@ export default class paper extends Service {
         paper_id: paperId,
       });
       if (!paper || Number(paper.user_id) !== ownerId) return null;
-      // 重建试卷-题目关联
-      await app.mysql.delete('paper_question', { paper_id: paperId });
-      const idList = String(ids)
-        .split(',')
-        .map((x: string) => x.trim())
-        .filter((x: string) => x !== '');
-      for (let i = 0; i < idList.length; i++) {
-        await app.mysql.insert('paper_question', {
-          paper_id: paperId,
-          question_id: Number(idList[i]),
-          sort_order: i,
-        });
+      // 重建试卷-题目关联 + 更新审核状态，事务化：中途失败全部回滚，避免题目被清空但审核状态未更新
+      const conn = await app.mysql.beginTransaction();
+      try {
+        await conn.delete('paper_question', { paper_id: paperId });
+        const idList = String(ids)
+          .split(',')
+          .map((x: string) => x.trim())
+          .filter((x: string) => x !== '');
+        for (let i = 0; i < idList.length; i++) {
+          await conn.insert('paper_question', {
+            paper_id: paperId,
+            question_id: Number(idList[i]),
+            sort_order: i,
+          });
+        }
+        // 公开(1)重新审核；私有(3)/官方(-1)无需审核
+        const chkState = Number(paper.purview) === 1 ? 0 : 1;
+        await conn.update(
+          'examination_paper',
+          { chkState },
+          { where: { paper_id: paperId } },
+        );
+        await conn.commit();
+        return { chkState };
+      } catch (err) {
+        await conn.rollback();
+        throw err;
       }
-      // 公开(1)重新审核；私有(3)/官方(-1)无需审核
-      const chkState = Number(paper.purview) === 1 ? 0 : 1;
-      await app.mysql.update(
-        'examination_paper',
-        { chkState },
-        { where: { paper_id: paperId } },
-      );
-      return { chkState };
     } catch (err) {
       return null;
     }
