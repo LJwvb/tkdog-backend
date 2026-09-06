@@ -50,6 +50,32 @@ export default class admin extends Controller {
       ctx.fail('修改失败,请重新修改~');
     }
   }
+  // 管理端编辑用户：修改用户名/手机号（用户名需唯一）
+  public async adminUpdateUser() {
+    const { ctx } = this;
+    const { userId, username, phone } = ctx.request.body || {};
+    if (!userId) {
+      ctx.fail('缺少用户ID');
+      return;
+    }
+    const check = await ctx.service.sensitiveWord.check(
+      [ username, phone ].filter(Boolean).join(' '),
+    );
+    if (check && check.blocked) {
+      ctx.fail('用户名包含违禁词，请修改后重试~');
+      return;
+    }
+    const result = await ctx.service.admin.adminUpdateUser({ userId, username, phone });
+    if (!result) {
+      ctx.fail('修改失败');
+      return;
+    }
+    if (result.duplicate) {
+      ctx.fail('用户名已存在，请更换~');
+      return;
+    }
+    ctx.success(null, '修改成功');
+  }
   // 获取用户列表
   public async getUserList() {
     const { ctx } = this;

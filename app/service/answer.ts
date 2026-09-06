@@ -296,6 +296,11 @@ export default class answer extends Service {
         });
       }
 
+      // 客观题答对 +1 积分/题（落库），主观题答对后由 AI 批改时加分
+      if (correctNum > 0) {
+        await app.mysql.query('UPDATE user SET integral = integral + ? WHERE userId = ?', [correctNum, userId]);
+      }
+
       return {
         recordId,
         score,
@@ -304,6 +309,71 @@ export default class answer extends Service {
         wrongNum,
         subjectiveNum,
         detail,
+      };
+    } catch (err) {
+      return null;
+    }
+  }
+
+  // 根据 recordId 获取历史答题记录详情（只读，用于回看）
+  public async getRecordDetail(recordId: number, userId?: number) {
+    const { app } = this;
+    try {
+      const record: any = await app.mysql.get('paper_record', { id: recordId });
+      if (!record) return null;
+      // 越权校验：只能看自己的记录
+      if (userId && Number(record.user_id) !== userId) return null;
+
+      const paper: any = await app.mysql.get('examination_paper', {
+        paper_id: record.paper_id,
+      });
+      if (!paper) return null;
+
+      // 按试卷题目顺序查询
+      const questions: any[] = (await app.mysql.query(
+        'SELECT q.* FROM paper_question pq ' +
+          'JOIN questions q ON pq.question_id = q.id ' +
+          'WHERE pq.paper_id = ? ORDER BY pq.sort_order',
+        [ record.paper_id ],
+      )) as any[];
+
+      // 查询该次答题的所有 answer_record
+      const answers: any[] = (await app.mysql.select('answer_record', {
+        where: { record_id: recordId },
+      })) as any[];
+      const answerMap: Record<string, any> = {};
+      answers.forEach((a: any) => {
+        answerMap[String(a.question_id)] = a;
+      });
+
+      const detail: any[] = questions.map((q: any) => {
+        const a = answerMap[String(q.id)] || {};
+        return {
+          questionId: q.id,
+          questionType: Number(q.questionType),
+          question: q.question,
+          questionDetail: q.questionDetail,
+          correctAnswer: q.answer,
+          userAnswer: a.user_answer ?? '',
+          isCorrect: a.is_correct ?? null,
+          score: a.score ?? null,
+          maxScore: a.max_score ?? null,
+          aiComment: a.ai_comment ?? '',
+        };
+      });
+
+      return {
+        paperInfo: paper,
+        questions,
+        result: {
+          recordId,
+          score: record.score,
+          questionNum: questions.length,
+          correctNum: record.correct_num,
+          wrongNum: record.wrong_num,
+          subjectiveNum: record.subjective_num,
+          detail,
+        },
       };
     } catch (err) {
       return null;
@@ -327,6 +397,11 @@ export default class answer extends Service {
     const earned = Math.max(0, Math.min(maxScore, Math.round((aiScore / 100) * maxScore)));
     const passScore = Number((this.config as any)?.aiJudge?.passScore) || 60;
     const isCorrect = aiScore >= passScore;
+    // 主观题首次判对时 +1 积分（避免重复加分）
+    const wasCorrect = Number(ar?.is_correct) === 1;
+    if (isCorrect && !wasCorrect && ar?.user_id) {
+      await app.mysql.query('UPDATE user SET integral = integral + 1 WHERE userId = ?', [ar.user_id]);
+    }
 
     await app.mysql.update(
       'answer_record',

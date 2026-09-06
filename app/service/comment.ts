@@ -90,10 +90,84 @@ export default class comment extends Service {
   // 顶层评论分页返回：result 为当前页的顶层评论树，total 为顶层评论总数
   public async getCommentList(params) {
     const { app } = this;
-    const { questionId, onlyApproved, currentPage = 1, pageSize = 10, userId } = params || {};
+    const { questionId, onlyApproved, currentPage = 1, pageSize = 10, userId, groupPage, groupPageSize } = params || {};
     try {
       const page = Number(currentPage) || 1;
       const size = Number(pageSize) || 10;
+
+      // ===== 管理端按组分页模式：groupPage 存在时按「题目组」分页返回 =====
+      if (groupPage) {
+        const gp = Number(groupPage) || 1;
+        const gs = Number(groupPageSize) || 10;
+
+        // 1. 有顶层评论的题目组总数
+        const groupTotalRows: any = await app.mysql.query(
+          'SELECT COUNT(*) AS count FROM (SELECT question_id FROM comment WHERE is_deleted = 0 AND parent_id IS NULL AND question_id IS NOT NULL GROUP BY question_id) t',
+        );
+        const totalGroups = Number(groupTotalRows[0].count) || 0;
+
+        // 2. 当前页题目组（按最近评论时间倒序）
+        const groupRows: any = await app.mysql.query(
+          'SELECT c.question_id AS question_id, q.question AS question_title, MAX(c.create_time) AS last_time ' +
+            'FROM comment c LEFT JOIN questions q ON c.question_id = q.id ' +
+            'WHERE c.is_deleted = 0 AND c.parent_id IS NULL AND c.question_id IS NOT NULL ' +
+            'GROUP BY c.question_id ORDER BY last_time DESC LIMIT ? OFFSET ?',
+          [ gs, (gp - 1) * gs ],
+        );
+
+        if (!groupRows.length) {
+          return { result: [], totalGroups };
+        }
+
+        const qids = groupRows.map((r: any) => Number(r.question_id));
+
+        // 3. 这些题目的全部评论（顶层+回复，管理端含待审核，不含已删除）
+        const list: any = await app.mysql.query(
+          'SELECT c.id, c.user_id, c.question_id, c.content, u.username, c.create_time, ' +
+            'c.parent_id, pu.username AS reply_username, c.status, c.is_pinned, c.images, u.avatar, q.question AS question_title ' +
+            'FROM comment c ' +
+            'LEFT JOIN user u ON c.user_id = u.userId ' +
+            'LEFT JOIN comment pc ON c.parent_id = pc.id ' +
+            'LEFT JOIN user pu ON pc.user_id = pu.userId ' +
+            'LEFT JOIN questions q ON c.question_id = q.id ' +
+            'WHERE c.question_id IN (?) AND c.is_deleted = 0 ' +
+            'ORDER BY c.is_pinned DESC, c.create_time DESC',
+          [ qids ],
+        );
+
+        // 4. 点赞数（限这些题目）
+        const likeRows: any = await app.mysql.query(
+          'SELECT cl.comment_id, COUNT(*) AS cnt FROM comment_like cl ' +
+            'JOIN comment c ON cl.comment_id = c.id WHERE c.question_id IN (?) GROUP BY cl.comment_id',
+          [ qids ],
+        );
+        const likeMap = new Map<number, number>();
+        likeRows.forEach((r: any) => likeMap.set(Number(r.comment_id), Number(r.cnt) || 0));
+
+        // 5. 当前用户已赞
+        const likedSet = new Set<number>();
+        if (userId) {
+          const liked: any = await app.mysql.query(
+            'SELECT comment_id FROM comment_like WHERE user_id = ?',
+            [ userId ],
+          );
+          liked.forEach((r: any) => likedSet.add(Number(r.comment_id)));
+        }
+
+        list.forEach((c: any) => {
+          c.like_count = likeMap.get(Number(c.id)) || 0;
+          c.is_liked = likedSet.has(Number(c.id)) ? 1 : 0;
+        });
+
+        // 6. 组装树并按题目分组（回复挂在对应题的顶层树下）
+        const tree = this.buildTree(list);
+        const groups = groupRows.map((g: any) => ({
+          question_id: Number(g.question_id),
+          question_title: g.question_title || '（题目已删除）',
+          comments: tree.filter((node: any) => Number(node.question_id) === Number(g.question_id)),
+        }));
+        return { result: groups, totalGroups };
+      }
 
       // 顶层评论 WHERE 条件
       const rootWhere: string[] = [ 'c.is_deleted = 0', 'c.parent_id IS NULL' ];
@@ -272,16 +346,19 @@ export default class comment extends Service {
     const { app } = this;
     try {
       if (pinned) {
-        // 找到该评论所属题目，便于清空同题下其它置顶
+        // 找到该评论所属题目，便于判断同题下是否已有置顶
         const target: any = await app.mysql.get('comment', { id });
         if (!target) return null;
         // 只允许置顶顶层评论（回复类评论置顶后无法排到最前）
         if (target.parent_id) return null;
-        // 先取消同题下其它评论的置顶，保证只保留这一条
-        await app.mysql.query(
-          'UPDATE comment SET is_pinned = 0 WHERE question_id = ? AND id != ?',
+        // 同题下已有其它置顶评论：返回冲突，交由前端提示先取消原置顶
+        const existing: any = await app.mysql.query(
+          'SELECT id FROM comment WHERE question_id = ? AND is_pinned = 1 AND id != ? AND is_deleted = 0 LIMIT 1',
           [ target.question_id, id ],
         );
+        if (existing && existing.length > 0) {
+          return { conflict: true, existingId: existing[0].id };
+        }
       }
       const result = await app.mysql.update(
         'comment',

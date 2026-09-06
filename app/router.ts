@@ -94,7 +94,15 @@ export default (app: Application) => {
   router.post('/submitPaper', auth, controller.answer.submitPaper);
   // AI 批改简答题（主观题）
   router.post('/aiJudgeAnswer', auth, controller.answer.aiJudgeAnswer);
+router.post('/aiJudgeBatch', auth, controller.answer.aiJudgeBatch);
+  // AI 解题解析
+  router.post('/aiAnalyze', auth, controller.answer.aiAnalyze);
+  router.post('/aiPaperReport', auth, controller.answer.aiPaperReport);
+  router.post('/aiLearningReport', auth, controller.user.aiLearningReport);
+  router.post('/exchangeAiCredit', auth, controller.user.exchangeAiCredit);
+  router.post('/aiPaperSuggest', auth, controller.paper.aiPaperSuggest);
   router.post('/getMyPaperRecords', auth, controller.answer.getMyPaperRecords);
+  router.post('/getRecordDetail', auth, controller.answer.getRecordDetail);
   router.post('/getAnswerStats', auth, controller.answer.getAnswerStats);
   router.post('/getWrongQuestions', auth, controller.answer.getWrongQuestions);
   router.post(
@@ -122,6 +130,7 @@ export default (app: Application) => {
     controller.admin.editAdminPassword
   );
   router.post('/getUserList', adminAuth, controller.admin.getUserList);
+  router.post('/adminUpdateUser', adminAuth, controller.admin.adminUpdateUser);
   router.post(
     '/getAdminStatistics',
     adminAuth,

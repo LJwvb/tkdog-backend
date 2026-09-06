@@ -47,7 +47,7 @@ export default class User extends Service {
     loginWindows.set(key, arr);
     // 定期清理过期 key，防止长期运行内存增长（单进程内存限流）
     if (loginWindows.size > 500) {
-      for (const [k, v] of loginWindows) {
+      for (const [ k, v ] of loginWindows) {
         const fresh = v.filter(t => now - t < windowMs);
         if (fresh.length === 0) {
           loginWindows.delete(k);
@@ -178,9 +178,9 @@ export default class User extends Service {
       const likeIds = likes.map((l: any) => l.question_id);
       result.likeTopicsId = likeIds.length ? ',' + likeIds.join(',') : '';
 
-      // 积分与答题/打卡统计
+      // 积分直接读落库字段，答题/打卡数仍实时计算
+      result.integral = Number(result.integral ?? 0);
       const points = await this.computePoints(result.userId);
-      result.integral = points.integral;
       result.correct_ques_num = points.correct;
       result.checkin_days = points.checkin;
       // 每日目标：目标值 + 今日答对数
@@ -221,17 +221,21 @@ export default class User extends Service {
         `SELECT COUNT(*) AS count FROM answer_record WHERE user_id = ? AND is_correct = 1${correctCond}`,
         correctParams,
       );
-      const checkinCond = since ? ' AND ctime >= ?' : '';
-      const checkinParams: any = since ? [ userId, since ] : [ userId ];
-      const checkinRows: any = await app.mysql.query(
-        `SELECT COUNT(*) AS count FROM checkin WHERE user_id = ?${checkinCond}`,
-        checkinParams,
-      );
+      // 打卡数：无时间筛选时直接读 user.total_checkin（落库字段），有筛选时查历史 checkin 表
+      let checkin = 0;
+      if (since) {
+        const checkinRows: any = await app.mysql.query(
+          'SELECT COUNT(*) AS count FROM checkin WHERE user_id = ? AND ctime >= ?',
+          [ userId, since ],
+        );
+        checkin = Number(checkinRows[0]?.count) || 0;
+      } else {
+        checkin = Number(user.total_checkin) || 0;
+      }
       const upload = Number(stats[0].upload) || 0;
       const approved = Number(stats[0].approved) || 0;
       const likes = Number(stats[0].likes) || 0;
       const correct = Number(correctRows[0].count) || 0;
-      const checkin = Number(checkinRows[0].count) || 0;
       const integral = approved * 5 + upload * 2 + correct * 1 + checkin * 5;
       return { upload, approved, likes, correct, checkin, integral };
     } catch (err) {
@@ -288,7 +292,7 @@ export default class User extends Service {
     }
   }
   // 更新用户信息（按 userId 定位，不依赖 phone）
-  public async updateUserInfo(params) {
+  public async updateUserInfo(params): Promise<any> {
     const { app } = this;
 
     try {
@@ -296,6 +300,13 @@ export default class User extends Service {
       if (updateData.password) {
         // 密码 bcrypt 加密
         updateData.password = await bcrypt.hash(updateData.password, 10);
+      }
+      // 用户名唯一性检测：排除当前用户自身
+      if (updateData.username) {
+        const dup: any = await app.mysql.get('user', { username: updateData.username });
+        if (dup && Number(dup.userId) !== Number(userId)) {
+          return { duplicate: true };
+        }
       }
       const result = await app.mysql.update('user', updateData, {
         where: { userId },

@@ -12,7 +12,7 @@ export default (_appInfo: EggAppInfo) => {
   config.keys = process.env.COOKIE_KEYS || randomBytes(32).toString('hex');
 
   // add your egg config in here
-  config.middleware = [];
+  config.middleware = [ 'requestLog' ];
   config.security = {
     csrf: {
       enable: false,

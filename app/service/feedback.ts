@@ -31,17 +31,40 @@ export default class feedback extends Service {
   // 反馈列表（管理员查看，分页）
   public async getFeedbackList(params) {
     const { app } = this;
-    const { currentPage = 1, pageSize = 10 } = params || {};
+    const { currentPage = 1, pageSize = 10, content, username, question, isResolved } = params || {};
     try {
+      // 独立搜索项：反馈内容/反馈人/对应题目，各自独立模糊匹配
+      const whereParts: string[] = [];
+      const whereValues: any[] = [];
+      const pushLike = (cond: string, val: unknown) => {
+        const v = String(val || '').trim();
+        if (v) {
+          whereParts.push(cond);
+          whereValues.push(`%${v}%`);
+        }
+      };
+      pushLike('f.content LIKE ?', content);
+      pushLike('u.username LIKE ?', username);
+      pushLike('q.question LIKE ?', question);
+      // 处理状态筛选：isResolved 为 0/1 时精确过滤，空则不筛
+      if (isResolved === 0 || isResolved === 1 || isResolved === '0' || isResolved === '1') {
+        whereParts.push('f.is_resolved = ?');
+        whereValues.push(Number(isResolved));
+      }
+      const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
       const result: any = await app.mysql.query(
         'SELECT f.*, u.username, q.question FROM question_feedback f ' +
           'LEFT JOIN user u ON f.user_id = u.userId ' +
           'LEFT JOIN questions q ON f.question_id = q.id ' +
-          'ORDER BY f.id DESC LIMIT ? OFFSET ?',
-        [ pageSize, (currentPage - 1) * pageSize ],
+          whereSql + ' ORDER BY f.id DESC LIMIT ? OFFSET ?',
+        [ ...whereValues, pageSize, (currentPage - 1) * pageSize ],
       );
       const totalRows: any = await app.mysql.query(
-        'SELECT COUNT(*) AS count FROM question_feedback',
+        'SELECT COUNT(*) AS count FROM question_feedback f ' +
+          'LEFT JOIN user u ON f.user_id = u.userId ' +
+          'LEFT JOIN questions q ON f.question_id = q.id ' +
+          whereSql,
+        whereValues,
       );
       return { result, total: totalRows[0].count };
     } catch (err) {

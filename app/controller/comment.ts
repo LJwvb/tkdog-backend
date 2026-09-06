@@ -46,7 +46,7 @@ export default class comment extends Controller {
   // 获取评论列表（可传 questionId 查某题评论；onlyApproved=true 仅返回审核通过；分页参数 currentPage/pageSize）
   public async getCommentList() {
     const { ctx } = this;
-    const { questionId, onlyApproved, currentPage, pageSize, userId } = ctx.query;
+    const { questionId, onlyApproved, currentPage, pageSize, userId, groupPage, groupPageSize } = ctx.query;
     // 审核状态过滤不能信任调用方：仅管理员可查看未审核评论，其余一律只看已审核
     const allowPending = ctx.isAdmin();
     const onlyApprovedEffective = allowPending
@@ -58,6 +58,8 @@ export default class comment extends Controller {
       currentPage,
       pageSize,
       userId,
+      groupPage,
+      groupPageSize,
     });
     if (result) {
       ctx.success(result, '请求成功');
@@ -115,6 +117,11 @@ export default class comment extends Controller {
     }
     const result = await ctx.service.comment.pinComment(Number(id), Boolean(pinned));
     if (result) {
+      const r = result as { conflict?: boolean };
+      if (r.conflict) {
+        ctx.fail('该题已有置顶评论，请先取消原置顶~');
+        return;
+      }
       ctx.success(null, pinned ? '已置顶~' : '已取消置顶~');
     } else {
       ctx.fail('操作失败~');

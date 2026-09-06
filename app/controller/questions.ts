@@ -113,6 +113,12 @@ export default class questions extends Controller {
       needReview: !isAdmin,
     });
     if (result) {
+      // 题目内容已变更，清除 AI 解析缓存（下次查看时重新生成）
+      try {
+        await ctx.app.mysql.delete('ai_analysis', { question_id: Number(id) });
+      } catch (e) {
+        ctx.app.logger.warn('[updateQuestion] 清除AI缓存失败:', e);
+      }
       ctx.success(null, '修改成功~');
     } else {
       ctx.fail('修改失败~');
@@ -286,10 +292,15 @@ export default class questions extends Controller {
     });
     return list;
   }
-  // 标签统计（管理员）
+  // 标签统计（管理员），支持分页
   public async getTagStats() {
     const { ctx } = this;
-    const result = await ctx.service.questions.getTagStats();
+    const { currentPage = 1, pageSize = 50, keyword } = ctx.request.body || {};
+    const result = await ctx.service.questions.getTagStats(
+      Number(currentPage) || 1,
+      Number(pageSize) || 50,
+      keyword,
+    );
     if (result) {
       ctx.success(result, '请求成功');
     } else {

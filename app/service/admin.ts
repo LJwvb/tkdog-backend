@@ -59,26 +59,101 @@ export default class admin extends Service {
       return null;
     }
   }
+  // 管理端编辑用户：修改用户名/手机号（用户名需唯一，排除自身）
+  public async adminUpdateUser(params) {
+    const { app } = this;
+    const { userId, username, phone } = params || {};
+    try {
+      const uid = Number(userId);
+      if (!uid) return null;
+      const updateData: any = {};
+      if (username !== undefined && String(username).trim() !== '') {
+        updateData.username = String(username).trim();
+      }
+      if (phone !== undefined) {
+        updateData.phone = String(phone).trim();
+      }
+      if (!Object.keys(updateData).length) return { empty: true };
+      // 用户名唯一性检测：排除当前用户自身
+      if (updateData.username) {
+        const dup: any = await app.mysql.get('user', { username: updateData.username });
+        if (dup && Number(dup.userId) !== uid) return { duplicate: true };
+      }
+      const result = await app.mysql.update('user', updateData, {
+        where: { userId: uid },
+      });
+      return { success: !!result };
+    } catch (err) {
+      return null;
+    }
+  }
   // 获取用户列表（分页）
   public async getUserList(params) {
     const { app } = this;
-    const { currentPage = 1, pageSize = 10 } = params || {};
+    const { currentPage = 1, pageSize = 10, username, phone, email, userId, orderBy, orderDir, role } = params || {};
     try {
       const page = Number(currentPage) || 1;
       const size = Number(pageSize) || 10;
+      // 排序白名单（防 SQL 注入）
+      const allowedSort = ['userId', 'integral', 'ai_credit', 'credit_exchanged', 'consecutive_days', 'total_checkin', 'ctime', 'last_login_time'];
+      const sortField = allowedSort.includes(orderBy) ? orderBy : 'userId';
+      const sortDir = String(orderDir || '').toLowerCase() === 'ascending' ? 'ASC' : 'DESC';
+
+      // 独立搜索项：用户名/ID/电话/邮箱，各自独立模糊匹配
+      const whereParts: string[] = [ 'is_deleted = 0' ];
+      const whereValues: any[] = [];
+      const pushLike = (col: string, val: unknown) => {
+        const v = String(val || '').trim();
+        if (v) {
+          whereParts.push(`${col} LIKE ?`);
+          whereValues.push(`%${v}%`);
+        }
+      };
+      pushLike('username', username);
+      pushLike('CONVERT(userId, CHAR)', userId);
+      pushLike('phone', phone);
+      pushLike('email', email);
+      const whereSql = `WHERE ${whereParts.join(' AND ')}`;
 
       // 1. 数据库分页查用户（替代原全表查询 + 内存切片）
       const totalRows: any = await app.mysql.query(
-        'SELECT COUNT(*) AS count FROM user WHERE is_deleted = 0',
+        `SELECT COUNT(*) AS count FROM user ${whereSql}`,
+        whereValues,
       );
       const total = Number(totalRows[0].count) || 0;
       const users: any = await app.mysql.query(
-        'SELECT * FROM user WHERE is_deleted = 0 ORDER BY userId LIMIT ? OFFSET ?',
-        [ size, (page - 1) * size ],
+        `SELECT * FROM user ${whereSql} ORDER BY ${sortField} ${sortDir} LIMIT ? OFFSET ?`,
+        [ ...whereValues, size, (page - 1) * size ],
       );
 
-      // 2. 管理员（数量极少，全查后混入列表）
-      const admin = await app.mysql.select('admin');
+      // 2. 管理员（数量极少，全查后混入列表）；role='admin' 时只返回管理员，role='user' 时不混入
+      let admin: any[] = [];
+      if (role !== 'user') {
+        admin = await app.mysql.select('admin');
+        // 管理员也按搜索条件过滤
+        if (username || userId || phone) {
+          admin = admin.filter((a: any) => {
+            if (username && !String(a.username || '').includes(String(username))) return false;
+            if (userId && String(a.userId || a.id || '') !== String(userId)) return false;
+            if (phone && !String(a.phone || '').includes(String(phone))) return false;
+            return true;
+          });
+        }
+      }
+      // role='admin' 时只返回管理员，不查普通用户
+      if (role === 'admin') {
+        const adminTotal = admin.length;
+        const adminPage = admin.slice((page - 1) * size, page * size);
+        const list = adminPage.map((a: any) => ({
+          userId: a.id,
+          name: a.name || a.username,
+          phone: a.phone || '-',
+          email: a.email || '-',
+          last_login_time: a.last_login_time,
+          role: 0,
+        }));
+        return { result: list, total: adminTotal };
+      }
 
       // 3. 当前页用户 ID 列表，用于后续批量聚合
       const userIds = users.map((u: any) => u.userId).filter(Boolean);
@@ -110,19 +185,7 @@ export default class admin extends Service {
         );
       }
 
-      // 6. 批量聚合：打卡天数
-      const checkinMap = new Map<number, number>();
-      if (placeholders) {
-        const checkinRows: any = await app.mysql.query(
-          `SELECT user_id, COUNT(*) AS count FROM checkin WHERE user_id IN (${placeholders}) GROUP BY user_id`,
-          userIds,
-        );
-        checkinRows.forEach((r: any) =>
-          checkinMap.set(Number(r.user_id), Number(r.count) || 0),
-        );
-      }
-
-      // 7. 组装列表（管理员行 + 当前页用户行）
+      // 6. 组装列表（管理员行 + 当前页用户行）
       const list: any[] = [ ...admin, ...users ];
       for (const item of list) {
         if (item.userId) {
@@ -130,10 +193,9 @@ export default class admin extends Service {
           item.upload_ques_num = Number(stats?.upload_ques_num) || 0;
           item.like_ques_num = Number(stats?.like_ques_num) || 0;
           item.approvedNums = Number(stats?.approvedNums) || 0;
-          // 积分公式与 computePoints 保持一致：上传×2 + 审核通过×5 + 答对×1 + 打卡×5
-          const correct = correctMap.get(Number(item.userId)) || 0;
-          const checkin = checkinMap.get(Number(item.userId)) || 0;
-          item.integral = item.approvedNums * 5 + item.upload_ques_num * 2 + correct + checkin * 5;
+          // 积分直接读落库字段 user.integral，答对题数用于展示
+          item.correct_ques_num = correctMap.get(Number(item.userId)) || 0;
+          item.integral = Number(item.integral) || 0;
         } else {
           item.upload_ques_num = 0;
           item.like_ques_num = 0;
@@ -417,6 +479,10 @@ export default class admin extends Service {
               : Number(params.chkState) === 2
                 ? '审核不通过'
                 : '待审核';
+          // 审核通过 +5 积分（落库）
+          if (Number(params.chkState) === 1) {
+            await app.mysql.query('UPDATE user SET integral = integral + 5 WHERE userId = ?', [upload.user_id]);
+          }
           // 审核建议：与默认状态文案相同时不再重复拼接，自定义建议才附上并通知用户
           const remark = String(params.chkRemarks || '').trim();
           const remarkText =

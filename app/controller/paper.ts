@@ -141,4 +141,44 @@ export default class paper extends Controller {
       ctx.fail('修改失败，只能修改自己的试卷~');
     }
   }
+
+  // AI 智能组卷：按科目/难度/题型数量从已审核题库推荐题目组合
+  public async aiPaperSuggest() {
+    const { ctx } = this;
+    const { subjectID, difficulty, counts, tags } = ctx.request.body;
+    if (!ctx.service.ai.isConfigured()) {
+      ctx.success({ available: false, message: 'AI 未配置' }, '请求成功');
+      return;
+    }
+    if (ctx.service.ai.isRateLimited(ctx.currentUserId())) {
+      ctx.success(
+        { available: false, message: 'AI 请求过于频繁，请稍后再试' },
+        '请求成功',
+      );
+      return;
+    }
+    // 额度检查
+    const hasCreditS = await ctx.service.ai.consumeCredit(ctx.currentUserId(), 1);
+    if (!hasCreditS) {
+      ctx.success(
+        { available: false, message: 'AI 额度不足，可用积分兑换' },
+        '请求成功',
+      );
+      return;
+    }
+    const result = await ctx.service.ai.suggestPaperQuestions({
+      subjectID: subjectID === '' || subjectID === undefined ? undefined : Number(subjectID),
+      difficulty: difficulty === '' || difficulty === undefined ? undefined : Number(difficulty),
+      counts: counts || { single: 0, multiple: 0, judge: 0, essay: 0 },
+      tags: Array.isArray(tags) ? tags : [],
+    });
+    if (result) {
+      ctx.success({ available: true, ...result }, 'AI 组卷建议完成');
+    } else {
+      ctx.success(
+        { available: false, message: 'AI 组卷失败，请调整条件后重试' },
+        '请求成功',
+      );
+    }
+  }
 }

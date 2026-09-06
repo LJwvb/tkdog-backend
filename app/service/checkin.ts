@@ -1,6 +1,5 @@
 /* eslint-disable comma-dangle */
 import { Service } from 'egg';
-import { getNowFormatDate } from '../utils';
 
 function formatDate(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -8,74 +7,71 @@ function formatDate(d: Date): string {
 }
 
 export default class checkin extends Service {
-  // 打卡（同一天重复打卡返回 already）
+  // 打卡（同一天重复打卡返回 already）—— 直接更新 user 表，不再写 checkin 表
   public async checkin(userId) {
     const { app } = this;
-    const date = formatDate(new Date());
+    const today = formatDate(new Date());
     try {
-      const existing = await app.mysql.get('checkin', {
-        user_id: userId,
-        checkin_date: date,
-      });
-      if (existing) {
-        return { already: true, consecutive: await this.consecutiveDays(userId) };
+      const user: any = await app.mysql.get('user', { userId });
+      if (!user) return null;
+      const lastDate = user.last_checkin_date
+        ? formatDate(user.last_checkin_date instanceof Date ? user.last_checkin_date : new Date(user.last_checkin_date))
+        : null;
+      if (lastDate === today) {
+        return { already: true, consecutive: Number(user.consecutive_days) || 0 };
       }
-      await app.mysql.insert('checkin', {
-        user_id: userId,
-        checkin_date: date,
-        ctime: getNowFormatDate(),
-      });
-      return { already: false, consecutive: await this.consecutiveDays(userId) };
+      // 计算连续天数：昨天打卡则 +1，否则重置为 1
+      const yesterday = formatDate(new Date(Date.now() - 86400000));
+      const consecutive = lastDate === yesterday ? Number(user.consecutive_days || 0) + 1 : 1;
+      await app.mysql.update('user',
+        {
+          last_checkin_date: today,
+          consecutive_days: consecutive,
+          total_checkin: Number(user.total_checkin || 0) + 1,
+        },
+        { where: { userId } },
+      );
+      // 打卡 +5 积分
+      await app.mysql.query('UPDATE user SET integral = integral + 5 WHERE userId = ?', [userId]);
+      return { already: false, consecutive };
     } catch (err) {
       return null;
     }
   }
-  // 连续打卡天数
+
+  // 连续打卡天数（直接读 user 表）
   public async consecutiveDays(userId) {
     const { app } = this;
     try {
-      const rows: any = await app.mysql.query(
-        'SELECT DISTINCT checkin_date FROM checkin WHERE user_id = ? ORDER BY checkin_date DESC',
-        [ userId ],
-      );
-      // checkin_date 为 date 类型，驱动可能返回 Date 对象，统一转成 YYYY-MM-DD 字符串再比较
-      const toDateStr = (v: any) => {
-        const d = v instanceof Date ? v : new Date(v);
-        return formatDate(d);
-      };
-      const dates = new Set(rows.map((r: any) => toDateStr(r.checkin_date)));
-      let cursor = new Date();
-      // 今天未打卡时，从昨天开始连续计数
-      if (!dates.has(formatDate(cursor))) {
-        cursor = new Date(cursor.getTime() - 86400000);
-      }
-      let consecutive = 0;
-      while (dates.has(formatDate(cursor))) {
-        consecutive++;
-        cursor = new Date(cursor.getTime() - 86400000);
-      }
-      return consecutive;
+      const user: any = await app.mysql.get('user', { userId });
+      if (!user) return 0;
+      // 如果最后打卡不是今天或昨天，连续天数已失效
+      const today = formatDate(new Date());
+      const yesterday = formatDate(new Date(Date.now() - 86400000));
+      const lastDate = user.last_checkin_date
+        ? formatDate(user.last_checkin_date instanceof Date ? user.last_checkin_date : new Date(user.last_checkin_date))
+        : null;
+      if (lastDate !== today && lastDate !== yesterday) return 0;
+      return Number(user.consecutive_days) || 0;
     } catch (err) {
       return 0;
     }
   }
-  // 打卡信息
+
+  // 打卡信息（直接读 user 表）
   public async getCheckinInfo(userId) {
     const { app } = this;
     try {
+      const user: any = await app.mysql.get('user', { userId });
+      if (!user) return null;
       const today = formatDate(new Date());
-      const row = await app.mysql.get('checkin', {
-        user_id: userId,
-        checkin_date: today,
-      });
-      const totalRows: any = await app.mysql.query(
-        'SELECT COUNT(*) AS count FROM checkin WHERE user_id = ?',
-        [ userId ],
-      );
+      const lastDate = user.last_checkin_date
+        ? formatDate(user.last_checkin_date instanceof Date ? user.last_checkin_date : new Date(user.last_checkin_date))
+        : null;
       return {
-        todayChecked: Boolean(row),
+        todayChecked: lastDate === today,
         consecutive: await this.consecutiveDays(userId),
-        total: Number(totalRows[0].count) || 0,
+        total: Number(user.total_checkin) || 0,
       };
     } catch (err) {
       return null;

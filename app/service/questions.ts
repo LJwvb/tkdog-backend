@@ -261,6 +261,8 @@ export default class questions extends Service {
         user_id: userId,
         question_id: result.insertId,
       });
+      // 上传题目 +2 积分（落库）
+      await app.mysql.query('UPDATE user SET integral = integral + 2 WHERE userId = ?', [userId]);
       return result;
     } catch (err) {
       return null;
@@ -605,8 +607,8 @@ export default class questions extends Service {
       return null;
     }
   }
-  // 标签统计（从题目逗号分隔 tags 字段聚合）
-  public async getTagStats() {
+  // 标签统计（从题目逗号分隔 tags 字段聚合），支持分页
+  public async getTagStats(currentPage = 1, pageSize = 50, keyword = '') {
     const { app } = this;
     try {
       const rows: any = await app.mysql.query(
@@ -622,9 +624,17 @@ export default class questions extends Service {
             map.set(t, (map.get(t) || 0) + 1);
           });
       });
-      return Array.from(map.entries())
+      const kw = String(keyword || '').trim().toLowerCase();
+      const all = Array.from(map.entries())
         .map(([ tag, count ]) => ({ tag, count }))
+        .filter((t) => !kw || t.tag.toLowerCase().includes(kw))
         .sort((a, b) => b.count - a.count);
+      const total = all.length;
+      const start = (currentPage - 1) * pageSize;
+      return {
+        result: all.slice(start, start + pageSize),
+        total,
+      };
     } catch (err) {
       return null;
     }

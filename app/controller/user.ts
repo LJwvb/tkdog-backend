@@ -214,6 +214,7 @@ export default class User extends Controller {
     // 字段白名单：仅允许修改这些字段，防止 mass assignment 篡改 is_deleted/phone/password 等
     const allowedFields = [
       'username',
+      'phone',
       'avatar',
       'personalIntroduction',
       'sex',
@@ -238,11 +239,15 @@ export default class User extends Controller {
       ...updateData,
       userId: ctx.currentUserId(),
     });
-    if (result) {
-      ctx.success(null, '修改成功');
-    } else {
+    if (!result) {
       ctx.fail('修改失败');
+      return;
     }
+    if (result.duplicate) {
+      ctx.fail('用户名已存在，请更换~');
+      return;
+    }
+    ctx.success(null, '修改成功');
   }
   // 获取用户上传的题目
   public async getUserUploadQues() {
@@ -257,5 +262,82 @@ export default class User extends Controller {
     } else {
       ctx.fail('请求失败');
     }
+  }
+
+  // AI 学习报告：聚合用户学习数据生成个人画像（带缓存，可手动刷新）
+  public async aiLearningReport() {
+    const { ctx } = this;
+    const userId = ctx.currentUserId();
+    if (!userId) {
+      ctx.fail('请先登录~');
+      return;
+    }
+    if (!ctx.service.ai.isConfigured()) {
+      ctx.success({ available: false, message: 'AI 未配置' }, '请求成功');
+      return;
+    }
+    if (ctx.service.ai.isRateLimited(userId)) {
+      ctx.success(
+        { available: false, message: 'AI 请求过于频繁，请稍后再试' },
+        '请求成功',
+      );
+      return;
+    }
+    // 缓存命中不扣额度
+    const cachedLearn: any = await ctx.app.mysql.get('ai_learning_report', { user_id: userId });
+    if (cachedLearn?.report) {
+      try {
+        const cached = JSON.parse(cachedLearn.report);
+        ctx.success({ available: true, ...cached, fromCache: true }, 'AI 学习报告（缓存）');
+        return;
+      } catch { /* 缓存损坏继续生成 */ }
+    }
+    // 额度检查
+    const hasCreditL = await ctx.service.ai.consumeCredit(userId, 1);
+    if (!hasCreditL) {
+      ctx.success(
+        { available: false, message: 'AI 额度不足，可用积分兑换' },
+        '请求成功',
+      );
+      return;
+    }
+    const result = await ctx.service.ai.analyzeLearningReport(userId);
+    if (result) {
+      ctx.success({ available: true, ...result }, 'AI 学习报告生成完成');
+    } else {
+      ctx.success(
+        { available: false, message: 'AI 分析失败，请稍后重试' },
+        '请求成功',
+      );
+    }
+  }
+
+  // 积分兑换 AI 额度（10积分=1次）
+  public async exchangeAiCredit() {
+    const { ctx } = this;
+    const userId = ctx.currentUserId();
+    const { count } = ctx.request.body;
+    const num = Math.max(1, Math.min(100, Number(count) || 1));
+    const cost = num * 10; // 每次10积分
+    const user: any = await ctx.app.mysql.get('user', { userId });
+    if (!user) {
+      ctx.fail('用户不存在~');
+      return;
+    }
+    // 积分已落库，直接扣减
+    const available = Number(user.integral ?? 0);
+    if (available < cost) {
+      ctx.fail(`积分不足（当前${available}分），兑换${num}次需要${cost}积分`);
+      return;
+    }
+    await ctx.app.mysql.update('user',
+      {
+        integral: available - cost,
+        ai_credit: Number(user.ai_credit ?? 0) + num,
+        credit_exchanged: Number(user.credit_exchanged ?? 0) + cost,
+      },
+      { where: { userId } },
+    );
+    ctx.success({ cost, gained: num, remaining: available - cost, credit: Number(user.ai_credit ?? 0) + num }, `兑换成功，消耗${cost}积分，获得${num}次AI额度`);
   }
 }
