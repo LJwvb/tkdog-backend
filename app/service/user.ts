@@ -136,10 +136,10 @@ export default class User extends Service {
       const user: any = await app.mysql.get('user', { phone });
       if (!user) return null;
       const hashed = await bcrypt.hash(password, 10);
-      const result = await app.mysql.update(
-        'user',
-        { password: hashed },
-        { where: { userId: user.userId } },
+      // 重置密码时 token_version +1，使该用户的所有旧 token 立即失效
+      const result = await app.mysql.query(
+        'UPDATE user SET password = ?, token_version = token_version + 1 WHERE userId = ?',
+        [ hashed, user.userId ],
       );
       return result;
     } catch (err) {
@@ -218,12 +218,27 @@ export default class User extends Service {
           `WHERE uq.user_id = ? AND q.is_deleted = 0${sinceCond}`,
         statsParams,
       );
-      const correctCond = since ? ' AND ctime >= ?' : '';
-      const correctParams: any = since ? [ userId, since ] : [ userId ];
-      const correctRows: any = await app.mysql.query(
-        `SELECT COUNT(*) AS count FROM answer_record WHERE user_id = ? AND is_correct = 1${correctCond}`,
-        correctParams,
-      );
+      // 累计答对数：合并主表 + 归档表（归档表存储 90 天前数据）
+      // 周/月榜（有 since）只查主表，since 不会超过 90 天
+      let correct = 0;
+      if (since) {
+        const correctRows: any = await app.mysql.query(
+          'SELECT COUNT(*) AS count FROM answer_record WHERE user_id = ? AND is_correct = 1 AND ctime >= ?',
+          [ userId, since ],
+        );
+        correct = Number(correctRows[0]?.count) || 0;
+      } else {
+        // 累计：UNION ALL 合并主表和归档表
+        const correctRows: any = await app.mysql.query(
+          `SELECT SUM(cnt) AS count FROM (
+            SELECT COUNT(*) AS cnt FROM answer_record WHERE user_id = ? AND is_correct = 1
+            UNION ALL
+            SELECT COUNT(*) AS cnt FROM answer_record_archive WHERE user_id = ? AND is_correct = 1
+          ) t`,
+          [ userId, userId ],
+        );
+        correct = Number(correctRows[0]?.count) || 0;
+      }
       // 打卡数：无时间筛选时直接读 user.total_checkin（落库字段），有筛选时查历史 checkin 表
       let checkin = 0;
       if (since) {
@@ -238,7 +253,6 @@ export default class User extends Service {
       const upload = Number(stats[0].upload) || 0;
       const approved = Number(stats[0].approved) || 0;
       const likes = Number(stats[0].likes) || 0;
-      const correct = Number(correctRows[0].count) || 0;
       const integral = approved * 5 + upload * 2 + correct * 1 + checkin * 5;
       return { upload, approved, likes, correct, checkin, integral };
     } catch (err) {

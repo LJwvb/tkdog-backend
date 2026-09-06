@@ -95,7 +95,7 @@ export default class admin extends Service {
       const page = Number(currentPage) || 1;
       const size = Number(pageSize) || 10;
       // 排序白名单（防 SQL 注入）
-      const allowedSort = ['userId', 'integral', 'ai_credit', 'credit_exchanged', 'consecutive_days', 'total_checkin', 'ctime', 'last_login_time'];
+      const allowedSort = [ 'userId', 'integral', 'ai_credit', 'credit_exchanged', 'consecutive_days', 'total_checkin', 'ctime', 'last_login_time' ];
       const sortField = allowedSort.includes(orderBy) ? orderBy : 'userId';
       const sortDir = String(orderDir || '').toLowerCase() === 'ascending' ? 'ASC' : 'DESC';
 
@@ -649,10 +649,10 @@ export default class admin extends Service {
     const { app } = this;
     const { userId } = params;
     try {
-      const result = await app.mysql.update(
-        'user',
-        { is_deleted: 1 },
-        { where: { userId } },
+      // 删除用户时 token_version +1，使该用户的所有旧 token 立即失效
+      const result = await app.mysql.query(
+        'UPDATE user SET is_deleted = 1, token_version = token_version + 1 WHERE userId = ?',
+        [ userId ],
       );
       return result;
     } catch (err) {
@@ -744,7 +744,7 @@ export default class admin extends Service {
     const { app } = this;
     try {
       const result = await app.mysql.query(
-        'SELECT * FROM user WHERE is_deleted = 1',
+        'SELECT * FROM user WHERE is_deleted = 1 LIMIT 500',
       );
       return result;
     } catch (err) {

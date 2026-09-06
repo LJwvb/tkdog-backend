@@ -5,7 +5,7 @@
 
 ## ✨ 功能特性
 
-- **用户系统**：注册 / 登录 / 重置密码（图形验证码 + bcrypt 加密）、个人信息编辑（用户名/手机号，用户名唯一性校验）、每日刷题目标、积分体系、**违规账号删除管控（登录时提示因违规被删除）**
+- **用户系统**：注册 / 登录 / 重置密码（图形验证码 + bcrypt 加密）、**GitHub 第三方登录（OAuth 2.0）**、个人信息编辑（用户名/手机号，用户名唯一性校验）、每日刷题目标、积分体系、**违规账号删除管控（登录时提示因违规被删除）**
 - **题库系统**：单选 / 多选 / 判断 / 简答四类题型，题目浏览、关键词搜索、相似题推荐、每日一题、随机刷题
 - **AI 能力矩阵**：
   - **AI 解题提示**：独立 hint 字段存储，只给解题思路不给答案，缓存命中不扣额度
@@ -17,7 +17,7 @@
 - **试卷系统**：自主组卷 / AI 智能组卷、试卷公开/私有权限、试卷审核、答题与答题记录、答题报告回看
 - **互动体系**：题目点赞 / 收藏 / 评论（敏感词 + AI 智能审核）、关注用户、每日打卡、排行榜（总榜/周榜/月榜）、公告、意见反馈（AI 审核）、站内通知
 - **管理后台**：题目 / 试卷审核、标签管理、用户管理（管理员/用户分 Tab）、评论管理、纠错反馈管理、违禁词管理、删除与恢复、数据统计（近七日趋势、科目 / 题型分布）
-- **性能与安全**：用户级 AI 限流（每分钟 30 次）、内容缓存防重复调用、防暴力破解（IP 限流）、bcrypt 密码加密、Session + Cookie 签名鉴权
+- **性能与安全**：用户级 AI 限流（每分钟 30 次）、内容缓存防重复调用、防暴力破解（IP 限流）、bcrypt 密码加密、**JWT 双 Token 鉴权（accessToken 24h + refreshToken 7d，401 无感刷新）**、**Token 版本号机制（账号删除/修改密码后旧 Token 立即失效，内存缓存 1 分钟减少 DB 查询）**
 
 ## 🛠 技术栈
 
@@ -26,7 +26,7 @@
 | 运行时 | Node.js ≥ 14 |
 | 框架 | Egg.js 2.x + TypeScript |
 | 数据库 | MySQL 8.0（utf8mb4） |
-| 认证 | bcryptjs（密码）、Session + Cookie 签名（登录态） |
+| 认证 | bcryptjs（密码）、**JWT 双 Token（jsonwebtoken）+ Token 版本号机制**、GitHub OAuth 2.0 |
 | 其他 | svg-captcha（图形验证码）、egg-cors（跨域）、string-similarity（相似题）、DeepSeek API（AI 判分/解题提示/智能组卷/内容审核） |
 
 ## 📁 目录结构
@@ -45,7 +45,7 @@ config/
   config.local.ts     本地开发配置（敏感密钥，已 gitignore 不提交）
   config.prod.ts      生产配置
   plugin.ts           Egg 插件
-demo.sql        建表脚本 + 初始数据（含管理员与演示账号）
+tkdog.sql       建表脚本 + 初始数据（含管理员与演示账号）
 ```
 
 ## 🚀 快速开始
@@ -53,7 +53,7 @@ demo.sql        建表脚本 + 初始数据（含管理员与演示账号）
 ### 环境要求
 
 - Node.js ≥ 14
-- MySQL 8.0（数据库名 `demo`，字符集 `utf8mb4`）
+- MySQL 8.0（数据库名 `tkdog`，字符集 `utf8mb4`）
 
 ### 1. 安装依赖
 
@@ -63,11 +63,11 @@ npm install
 
 ### 2. 准备数据库
 
-创建数据库 `demo`（字符集 utf8mb4），并导入建表脚本：
+创建数据库 `tkdog`（字符集 utf8mb4），并导入建表脚本：
 
 ```bash
-mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS demo DEFAULT CHARACTER SET utf8mb4;"
-mysql -u root -p demo < demo.sql
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS tkdog DEFAULT CHARACTER SET utf8mb4;"
+mysql -u root -p tkdog < tkdog.sql
 ```
 
 ### 3. 配置本地开发密钥
@@ -81,6 +81,12 @@ export default () => {
   config.aiJudge = { apiKey: '你的 DeepSeek API Key' };
   // Cookie 签名密钥（生产环境务必替换为随机长字符串）
   config.keys = '你的随机密钥';
+  // GitHub OAuth 第三方登录（可选，不配置则不显示 GitHub 登录按钮）
+  config.githubOAuth = {
+    clientId: '你的 GitHub OAuth App Client ID',
+    clientSecret: '你的 GitHub OAuth App Client Secret',
+    redirectUri: 'http://localhost:5173', // 必须与 GitHub OAuth App 配置完全一致
+  };
   return config;
 };
 ```
@@ -101,10 +107,12 @@ npm run dev
 
 | 配置项 | 位置 | 说明 |
 |---|---|---|
-| 数据库连接 | `config/config.default.ts` → `config.mysql` | 默认 `root@127.0.0.1:3306/demo`，按需修改 |
+| 数据库连接 | `config/config.default.ts` → `config.mysql` | 默认 `root@127.0.0.1:3306/tkdog`，按需修改 |
 | Cookie 签名密钥 | `config.keys` | 本地在 `config.local.ts` 配置；生产用环境变量 `COOKIE_KEYS` 注入 |
 | AI 服务 | `config.aiJudge` | 本地在 `config.local.ts` 配置 `apiKey`/`baseUrl`/`model`；用于 AI 判分、解题提示、智能组卷、内容审核；生产用环境变量 `AI_API_KEY` 注入 |
 | AI 额度 | 初始 100 次/人 | 支持积分兑换额度，调用前检查，缓存命中不扣 |
+| GitHub OAuth | `config.githubOAuth` | 本地在 `config.local.ts` 配置 `clientId`/`clientSecret`/`redirectUri`；用于 GitHub 第三方登录 |
+| JWT 鉴权 | 密钥硬编码（生产用环境变量 `JWT_SECRET`） | accessToken 24h + refreshToken 7d，401 无感刷新，Token 版本号机制使旧 Token 可主动失效 |
 | 跨域 | `config.cors` | 反射请求 Origin 并允许携带凭证，配合前端 `withCredentials` |
 
 > 安全提醒：`config.local.ts` 与 `.env*` 均已被 `.gitignore` 忽略，密钥严禁写入 `config.default.ts` 等会提交的源码文件。

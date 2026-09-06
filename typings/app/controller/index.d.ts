@@ -12,6 +12,7 @@ import ExportFavorite from '../../../app/controller/favorite';
 import ExportFeedback from '../../../app/controller/feedback';
 import ExportFollow from '../../../app/controller/follow';
 import ExportNotification from '../../../app/controller/notification';
+import ExportOauth from '../../../app/controller/oauth';
 import ExportPaper from '../../../app/controller/paper';
 import ExportQuestions from '../../../app/controller/questions';
 import ExportRankingList from '../../../app/controller/rankingList';
@@ -31,6 +32,7 @@ declare module 'egg' {
     feedback: ExportFeedback;
     follow: ExportFollow;
     notification: ExportNotification;
+    oauth: ExportOauth;
     paper: ExportPaper;
     questions: ExportQuestions;
     rankingList: ExportRankingList;

@@ -16,6 +16,7 @@ import ExportComment from '../../../app/service/comment';
 import ExportFavorite from '../../../app/service/favorite';
 import ExportFeedback from '../../../app/service/feedback';
 import ExportFollow from '../../../app/service/follow';
+import ExportGithub from '../../../app/service/github';
 import ExportNotification from '../../../app/service/notification';
 import ExportPaper from '../../../app/service/paper';
 import ExportQuestions from '../../../app/service/questions';
@@ -34,6 +35,7 @@ declare module 'egg' {
     favorite: AutoInstanceType<typeof ExportFavorite>;
     feedback: AutoInstanceType<typeof ExportFeedback>;
     follow: AutoInstanceType<typeof ExportFollow>;
+    github: AutoInstanceType<typeof ExportGithub>;
     notification: AutoInstanceType<typeof ExportNotification>;
     paper: AutoInstanceType<typeof ExportPaper>;
     questions: AutoInstanceType<typeof ExportQuestions>;

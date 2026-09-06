@@ -16,6 +16,10 @@ export default (app: Application) => {
   router.post('/login', controller.user.login);
   router.post('/resetPassword', controller.user.resetPassword);
   router.post('/logout', controller.user.logout);
+  router.post('/refreshToken', controller.user.refreshToken);
+  // GitHub OAuth 第三方登录
+  router.get('/oauth/github', controller.oauth.github);
+  router.post('/oauth/github/callback', controller.oauth.githubCallback);
   router.post('/adminLogin', controller.admin.adminLogin);
   router.post('/getQuestions', controller.questions.getQuestions);
   router.post('/getQuestionDetail', controller.questions.getQuestionDetail);

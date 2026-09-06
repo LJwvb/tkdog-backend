@@ -1,5 +1,6 @@
 ﻿import { Controller } from 'egg';
 import { getNowFormatDate, removePassword } from '../utils';
+import { generateTokenPair, verifyRefreshToken } from '../utils/jwt';
 
 export default class User extends Controller {
   // 登录
@@ -27,17 +28,19 @@ export default class User extends Controller {
       return;
     }
     if (data) {
-      // 设置 session（后端鉴权依据，前端不可篡改）。
-      // 只写普通用户身份，不动管理员的 ADMIN_SESS cookie，两者可在同一浏览器并存。
-      ctx.session.userId = data.userId;
-      ctx.session.username = data.username;
+      // 生成双 Token（accessToken 24h，refreshToken 7d），携带 tokenVersion
+      const { accessToken, refreshToken } = generateTokenPair({
+        userId: data.userId,
+        username: data.username,
+        tokenVersion: (data as any).token_version ?? 0,
+      });
       await ctx.service.user.updateUserInfo({
         last_login_time: getNowFormatDate(),
         userId: data.userId,
       });
-      // 去除密码（保留本人手机号，前端据此识别登录态）
+      // 去除密码，返回用户信息 + 双 token
       const returnData = removePassword(data);
-      ctx.success(returnData, '登录成功');
+      ctx.success({ ...returnData, token: accessToken, accessToken, refreshToken }, '登录成功');
     } else {
       ctx.fail('账号或密码错误，登录失败');
     }
@@ -52,6 +55,36 @@ export default class User extends Controller {
       overwrite: true,
     });
     ctx.success(null, '退出成功');
+  }
+  // 刷新 Token（无感刷新：accessToken 过期后用 refreshToken 换新的双 token）
+  public async refreshToken() {
+    const { ctx } = this;
+    const { refreshToken } = ctx.request.body;
+    if (!refreshToken) {
+      ctx.fail('缺少 refreshToken');
+      return;
+    }
+    // 验证 refreshToken（必须是 refresh 类型且未过期）
+    const payload = verifyRefreshToken(refreshToken);
+    if (!payload) {
+      ctx.unauthorized('登录已过期，请重新登录');
+      return;
+    }
+    // 从数据库查询最新的 tokenVersion，比对是否一致
+    const user = await ctx.app.mysql.get('user', { userId: payload.userId });
+    const dbTokenVersion = (user as any)?.token_version ?? 0;
+    // tokenVersion 不匹配说明账号已删除或修改密码，旧 refreshToken 失效
+    if (dbTokenVersion !== (payload.tokenVersion ?? 0)) {
+      ctx.unauthorized('登录已过期，请重新登录');
+      return;
+    }
+    // 生成新的双 token，携带最新的 tokenVersion
+    const { accessToken, refreshToken: newRefreshToken } = generateTokenPair({
+      userId: payload.userId,
+      username: payload.username,
+      tokenVersion: dbTokenVersion,
+    });
+    ctx.success({ accessToken, refreshToken: newRefreshToken }, 'Token 刷新成功');
   }
   // 查看他人公开主页
   public async getPublicProfile() {

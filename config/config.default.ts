@@ -34,7 +34,7 @@ export default (_appInfo: EggAppInfo) => {
       // 密码
       password: '',
       // 数据库名
-      database: 'demo',
+      database: 'tkdog',
       // 连接字符集：必须 utf8mb4 才能正常存取 emoji（4 字节字符），
       // node-mysql 默认是 utf8(3字节)，会导致评论表情被截断/报错。
       // egg-mysql 的 EggMySQLClientOption 类型未声明 charset，这里用交叉类型补上。

@@ -1,0 +1,216 @@
+import { Service } from 'egg';
+import * as https from 'https';
+import { getNowFormatDate } from '../utils';
+import bcrypt from 'bcryptjs';
+
+/**
+ * GitHub OAuth 登录服务
+ */
+export default class Github extends Service {
+  /**
+   * 生成 GitHub 授权页 URL
+   */
+  public getAuthUrl(state: string): string {
+    const { config } = this;
+    const cfg = (config as any).githubOAuth;
+    const params = new URLSearchParams({
+      client_id: cfg.clientId,
+      redirect_uri: cfg.redirectUri,
+      scope: 'read:user user:email',
+      state,
+      allow_signup: 'true',
+    });
+    return `https://github.com/login/oauth/authorize?${params.toString()}`;
+  }
+
+  /**
+   * 用 code 换 access_token
+   */
+  public async getAccessToken(code: string): Promise<string | null> {
+    const { config } = this;
+    const cfg = (config as any).githubOAuth;
+    const postData = JSON.stringify({
+      client_id: cfg.clientId,
+      client_secret: cfg.clientSecret,
+      code,
+      redirect_uri: cfg.redirectUri,
+    });
+
+    return new Promise(resolve => {
+      const req = https.request(
+        {
+          hostname: 'github.com',
+          path: '/login/oauth/access_token',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'Content-Length': Buffer.byteLength(postData),
+          },
+          timeout: 15000,
+          rejectUnauthorized: false,
+        },
+        res => {
+          let body = '';
+          res.on('data', chunk => { body += chunk; });
+          res.on('end', () => {
+            this.ctx.logger.info('[GitHub getAccessToken] HTTP status:', res.statusCode, 'body:', body);
+            try {
+              const data = JSON.parse(body);
+              if (data.access_token) {
+                resolve(data.access_token);
+              } else {
+                this.ctx.logger.error('[GitHub getAccessToken] 响应中无 access_token:', JSON.stringify(data));
+                resolve(null);
+              }
+            } catch (e) {
+              this.ctx.logger.error('[GitHub getAccessToken] JSON 解析失败:', e, 'body:', body);
+              resolve(null);
+            }
+          });
+        },
+      );
+      req.on('error', e => {
+        this.ctx.logger.error('[GitHub getAccessToken] 请求错误:', e);
+        resolve(null);
+      });
+      req.on('timeout', () => {
+        this.ctx.logger.error('[GitHub getAccessToken] 请求超时');
+        (req as any).destroy();
+        resolve(null);
+      });
+      req.write(postData);
+      req.end();
+    });
+  }
+
+  /**
+   * 用 access_token 拉 GitHub 用户信息
+   */
+  public async getUserInfo(accessToken: string): Promise<any | null> {
+    return new Promise(resolve => {
+      const req = https.get(
+        {
+          hostname: 'api.github.com',
+          path: '/user',
+          headers: {
+            Authorization: `token ${accessToken}`,
+            Accept: 'application/vnd.github.v3+json',
+            'User-Agent': 'tkdog-oauth',
+          },
+          timeout: 15000,
+          rejectUnauthorized: false,
+        },
+        res => {
+          let body = '';
+          res.on('data', chunk => { body += chunk; });
+          res.on('end', () => {
+            this.ctx.logger.info('[GitHub getUserInfo] HTTP status:', res.statusCode, 'body:', body.substring(0, 500));
+            try {
+              resolve(JSON.parse(body));
+            } catch (e) {
+              this.ctx.logger.error('[GitHub getUserInfo] JSON 解析失败:', e, 'body:', body);
+              resolve(null);
+            }
+          });
+        },
+      );
+      req.on('error', e => {
+        this.ctx.logger.error('[GitHub getUserInfo] 请求错误:', e);
+        resolve(null);
+      });
+      req.on('timeout', () => {
+        this.ctx.logger.error('[GitHub getUserInfo] 请求超时');
+        (req as any).destroy();
+        resolve(null);
+      });
+    });
+  }
+
+  /**
+   * 根据 GitHub 用户信息查/建账号，返回本地用户
+   */
+  public async loginOrRegister(githubUser: any): Promise<any | null> {
+    const { app } = this;
+    const githubId = String(githubUser.id);
+    const username = githubUser.login || `github_${githubId}`;
+    const avatar = githubUser.avatar_url || '';
+    const email = githubUser.email || '';
+
+    try {
+      // 1. 按 github_id 查用户
+      let user: any = await app.mysql.get('user', { github_id: githubId, is_deleted: 0 });
+
+      if (user) {
+        // 已有账号，更新头像和最后登录时间
+        await app.mysql.update(
+          'user',
+          { avatar, last_login_time: getNowFormatDate() },
+          { where: { userId: user.userId } },
+        );
+        user.avatar = avatar;
+        return user;
+      }
+
+      // 2. 如果 GitHub 账号有邮箱，尝试按邮箱匹配已有账号
+      if (email) {
+        user = await app.mysql.get('user', { email, is_deleted: 0 });
+        if (user) {
+          // 绑定 github_id 到已有账号
+          await app.mysql.update(
+            'user',
+            { github_id: githubId, avatar, last_login_time: getNowFormatDate() },
+            { where: { userId: user.userId } },
+          );
+          user.github_id = githubId;
+          user.avatar = avatar;
+          return user;
+        }
+      }
+
+      // 3. 新建账号（GitHub 登录用户没有密码，随机生成一个，后续可在个人中心修改）
+      const randomPassword = Math.random().toString(36).slice(-8) + Date.now().toString(36);
+      const hashedPassword = await bcrypt.hash(randomPassword, 10);
+
+      // 处理用户名重复
+      let finalUsername = username;
+      let exists = await app.mysql.get('user', { username: finalUsername });
+      let suffix = 1;
+      while (exists) {
+        finalUsername = `${username}_${suffix}`;
+        exists = await app.mysql.get('user', { username: finalUsername });
+        suffix++;
+      }
+
+      const now = getNowFormatDate();
+      const result = await app.mysql.insert('user', {
+        username: finalUsername,
+        password: hashedPassword,
+        phone: null, // GitHub 登录用户手机号为空，后续可绑定
+        email,
+        avatar,
+        github_id: githubId,
+        sex: null,
+        ctime: now,
+        last_login_time: now,
+        personalIntroduction: githubUser.bio || '',
+        daily_goal: 0,
+        is_deleted: 0,
+        ai_credit: 100, // 初始 AI 额度
+        credit_exchanged: 0,
+        integral: 0,
+        last_checkin_date: null,
+        consecutive_days: 0,
+        total_checkin: 0,
+      });
+
+      if ((result as any).affectedRows > 0) {
+        return await app.mysql.get('user', { userId: (result as any).insertId });
+      }
+      return null;
+    } catch (err) {
+      this.ctx.logger.error('[GitHub OAuth] loginOrRegister error:', err);
+      return null;
+    }
+  }
+}
