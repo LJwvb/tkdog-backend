@@ -1,5 +1,5 @@
 {
-  "name": "showcase",
+  "name": "tkdog-backend",
   "version": "1.0.0",
   "description": "",
   "private": true,
@@ -7,14 +7,9 @@
     "typescript": true,
     "declarations": true
   },
-  "eggScriptsConfig": {
-    "require": [
-      "./register.js"
-    ]
-  },
   "scripts": {
-    "start": "egg-scripts start --daemon --title=egg-server-showcase",
-    "stop": "egg-scripts stop --title=egg-server-showcase",
+    "start": "egg-scripts start --daemon --require=./bootstrap.js --title=egg-server-tkdog-backend",
+    "stop": "egg-scripts stop --title=egg-server-tkdog-backend",
     "dev": "egg-bin dev",
     "debug": "egg-bin debug",
     "test-local": "egg-bin test",
@@ -35,7 +30,9 @@
     "jsonwebtoken": "^9.0.3",
     "md5": "^2.3.0",
     "string-similarity": "^4.0.4",
-    "svg-captcha": "^1.4.0"
+    "svg-captcha": "^1.4.0",
+    "ts-node": "^7.0.1",
+    "typescript": "^4.9.5"
   },
   "devDependencies": {
     "@eggjs/tsconfig": "^1.0.0",
@@ -50,8 +47,7 @@
     "egg-ci": "^2.1.0",
     "egg-mock": "^3.16.0",
     "eslint": "^8.0.0",
-    "eslint-config-egg": "^12.0.0",
-    "typescript": "^4.0.0"
+    "eslint-config-egg": "^12.0.0"
   },
   "engines": {
     "node": ">=14.0.0"

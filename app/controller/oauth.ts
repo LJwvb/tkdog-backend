@@ -100,6 +100,7 @@ export default class OAuth extends Controller {
     ctx.logger.info('[OAuth githubCallback] token pair 已生成, userId:', user.userId, 'username:', user.username);
 
     // 5. 返回用户信息 + 双 token（去除密码）
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- 解构剔除 password，避免随响应下发
     const { password, ...userInfo } = user;
     ctx.logger.info('[OAuth githubCallback] 返回用户信息:', JSON.stringify(userInfo));
     ctx.success({ ...userInfo, token: newAccessToken, accessToken: newAccessToken, refreshToken: newRefreshToken }, 'GitHub 登录成功');

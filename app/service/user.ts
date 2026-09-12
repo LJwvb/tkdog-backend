@@ -239,14 +239,13 @@ export default class User extends Service {
         );
         correct = Number(correctRows[0]?.count) || 0;
       }
-      // 打卡数：无时间筛选时直接读 user.total_checkin（落库字段），有筛选时查历史 checkin 表
+      // 打卡数：checkin 明细表已废弃，统一读 user 表。
+      // 无时间筛选：用累计打卡数 total_checkin；
+      // 有筛选（周/月榜）：user 表无法还原区间内每次打卡，改为「最近一次打卡是否落在区间内」近似。
       let checkin = 0;
       if (since) {
-        const checkinRows: any = await app.mysql.query(
-          'SELECT COUNT(*) AS count FROM checkin WHERE user_id = ? AND ctime >= ?',
-          [ userId, since ],
-        );
-        checkin = Number(checkinRows[0]?.count) || 0;
+        const t = user.last_checkin_time ? new Date(user.last_checkin_time).getTime() : 0;
+        checkin = t >= new Date(`${since} 00:00:00`).getTime() ? 1 : 0;
       } else {
         checkin = Number(user.total_checkin) || 0;
       }

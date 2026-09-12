@@ -13,8 +13,9 @@ export default class RankingList extends Service {
       }
 
       // 1. 只查未删除用户的基本信息（过滤已删除用户）
+      //    打卡相关字段一并取出：checkin 明细表已废弃，打卡数据统一存 user 表
       const users: any = await app.mysql.query(
-        'SELECT userId, username, avatar FROM user WHERE is_deleted = 0',
+        'SELECT userId, username, avatar, total_checkin, last_checkin_time FROM user WHERE is_deleted = 0',
       );
 
       // 2. 批量聚合：上传/审核通过/获赞（替代原 N+1 逐个 computePoints）
@@ -43,17 +44,22 @@ export default class RankingList extends Service {
         correctMap.set(Number(r.user_id), Number(r.count) || 0),
       );
 
-      // 4. 批量聚合：打卡天数
-      const checkinSinceCond = since ? ' AND ctime >= ?' : '';
-      const checkinParams: any[] = since ? [ since ] : [];
-      const checkinRows: any = await app.mysql.query(
-        `SELECT user_id, COUNT(*) AS count FROM checkin WHERE 1=1${checkinSinceCond} GROUP BY user_id`,
-        checkinParams,
-      );
+      // 4. 打卡天数：checkin 明细表已废弃，直接读 user 表。
+      //    全部榜：用累计打卡次数 total_checkin；
+      //    周榜/月榜：user 表无法还原区间内每次打卡，改为「最近一次打卡是否落在区间内」近似，
+      //    落在区间内计 1 次，否则计 0（会偏低，但无需额外明细表）。
       const checkinMap = new Map<number, number>();
-      checkinRows.forEach((r: any) =>
-        checkinMap.set(Number(r.user_id), Number(r.count) || 0),
-      );
+      if (!since) {
+        users.forEach((u: any) => {
+          checkinMap.set(Number(u.userId), Number(u.total_checkin) || 0);
+        });
+      } else {
+        const sinceTime = new Date(`${since} 00:00:00`).getTime();
+        users.forEach((u: any) => {
+          const t = u.last_checkin_time ? new Date(u.last_checkin_time).getTime() : 0;
+          checkinMap.set(Number(u.userId), t >= sinceTime ? 1 : 0);
+        });
+      }
 
       // 5. 内存合并计算积分（公式与 computePoints 保持一致：上传×2 + 审核通过×5 + 答对×1 + 打卡×5）
       const list: any[] = [];

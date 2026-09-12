@@ -45,15 +45,25 @@ export default class User extends Controller {
       ctx.fail('账号或密码错误，登录失败');
     }
   }
-  // 退出登录（同时清除普通用户 session 与管理员 cookie）
+  // 退出登录：按 role 区分退出哪一侧身份（两种身份独立，互不影响）
+  // role='admin' 只清管理员 ADMIN_SESS cookie；role='user' 只清普通用户 session；
+  // 不传 role 时保持旧行为（两侧都清），兼容未升级的调用方。
   public async logout() {
     const { ctx } = this;
-    ctx.session = null;
-    ctx.cookies.set('ADMIN_SESS', '', {
-      signed: true,
-      maxAge: 0,
-      overwrite: true,
-    });
+    const role = (ctx.request.body || {}).role;
+
+    if (role !== 'admin') {
+      // 普通用户退出：清服务端 session
+      ctx.session = null;
+    }
+    if (role !== 'user') {
+      // 管理员退出：清 ADMIN_SESS cookie
+      ctx.cookies.set('ADMIN_SESS', '', {
+        signed: true,
+        maxAge: 0,
+        overwrite: true,
+      });
+    }
     ctx.success(null, '退出成功');
   }
   // 刷新 Token（无感刷新：accessToken 过期后用 refreshToken 换新的双 token）

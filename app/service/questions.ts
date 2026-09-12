@@ -262,7 +262,7 @@ export default class questions extends Service {
         question_id: result.insertId,
       });
       // 上传题目 +2 积分（落库）
-      await app.mysql.query('UPDATE user SET integral = integral + 2 WHERE userId = ?', [userId]);
+      await app.mysql.query('UPDATE user SET integral = integral + 2 WHERE userId = ?', [ userId ]);
       return result;
     } catch (err) {
       return null;
@@ -627,7 +627,7 @@ export default class questions extends Service {
       const kw = String(keyword || '').trim().toLowerCase();
       const all = Array.from(map.entries())
         .map(([ tag, count ]) => ({ tag, count }))
-        .filter((t) => !kw || t.tag.toLowerCase().includes(kw))
+        .filter(t => !kw || t.tag.toLowerCase().includes(kw))
         .sort((a, b) => b.count - a.count);
       const total = all.length;
       const start = (currentPage - 1) * pageSize;

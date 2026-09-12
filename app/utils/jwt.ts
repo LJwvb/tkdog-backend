@@ -1,7 +1,29 @@
 import jwt from 'jsonwebtoken';
+import { randomBytes } from 'crypto';
 
-// JWT 密钥（生产环境应从环境变量读取）
-const JWT_SECRET = process.env.JWT_SECRET || 'tkdog_jwt_secret_key_2026';
+// JWT 密钥：生产环境必须通过 JWT_SECRET 环境变量注入。
+// 若沿用源码中的硬编码兜底值，任何人都可据此伪造任意用户的 token 提权。
+// 因此仅当处于开发/本地环境时才回退到随机密钥，生产环境下缺失 JWT_SECRET 直接抛错。
+//
+// 环境判定同时认 EGG_SERVER_ENV 与 NODE_ENV：
+//   - egg-scripts start 会自动设置 EGG_SERVER_ENV=prod（Egg 的官方约定，config.prod.ts 亦据此加载）
+//   - 部分部署平台（容器/云托管）习惯用 NODE_ENV=production
+// 两者任一为生产值即视为生产环境，避免因只设了一个而导致校验被绕过。
+const JWT_SECRET: string = (() => {
+  const fromEnv = process.env.JWT_SECRET;
+  if (fromEnv) return fromEnv;
+
+  const isProd = [ process.env.EGG_SERVER_ENV, process.env.NODE_ENV ]
+    .some(v => v === 'prod' || v === 'production');
+  if (isProd) {
+    throw new Error(
+      '[jwt] 生产环境必须设置 JWT_SECRET 环境变量，禁止使用内置默认密钥（可被用于伪造 token）',
+    );
+  }
+
+  // 开发环境未配置时生成随机密钥（每次启动失效，仅适合本地开发）
+  return randomBytes(32).toString('hex');
+})();
 // Access Token 过期时间：24 小时
 const ACCESS_TOKEN_EXPIRES_IN = '24h';
 // Refresh Token 过期时间：7 天

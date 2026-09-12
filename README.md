@@ -1,4 +1,4 @@
-# 面试狗 · 后端服务
+# 面试狗 · 后端服务（tkdog-backend）
 
 > 在线面试刷题平台后端服务，为前端 `tkdog` 提供 RESTful API。
 > 涵盖题库、试卷、答题判分、用户互动、AI 简答判分与管理后台等完整业务闭环。
@@ -25,7 +25,7 @@
 |---|---|
 | 运行时 | Node.js ≥ 14 |
 | 框架 | Egg.js 2.x + TypeScript |
-| 数据库 | MySQL 8.0（utf8mb4） |
+| 数据库 | MariaDB 10.11（utf8mb4，兼容 MySQL 8.0） |
 | 认证 | bcryptjs（密码）、**JWT 双 Token（jsonwebtoken）+ Token 版本号机制**、GitHub OAuth 2.0 |
 | 其他 | svg-captcha（图形验证码）、egg-cors（跨域）、string-similarity（相似题）、DeepSeek API（AI 判分/解题提示/智能组卷/内容审核） |
 
@@ -112,7 +112,7 @@ npm run dev
 | AI 服务 | `config.aiJudge` | 本地在 `config.local.ts` 配置 `apiKey`/`baseUrl`/`model`；用于 AI 判分、解题提示、智能组卷、内容审核；生产用环境变量 `AI_API_KEY` 注入 |
 | AI 额度 | 初始 100 次/人 | 支持积分兑换额度，调用前检查，缓存命中不扣 |
 | GitHub OAuth | `config.githubOAuth` | 本地在 `config.local.ts` 配置 `clientId`/`clientSecret`/`redirectUri`；用于 GitHub 第三方登录 |
-| JWT 鉴权 | 密钥硬编码（生产用环境变量 `JWT_SECRET`） | accessToken 24h + refreshToken 7d，401 无感刷新，Token 版本号机制使旧 Token 可主动失效 |
+| JWT 鉴权 | `app/utils/jwt.ts`（生产必须用环境变量 `JWT_SECRET` 注入） | accessToken 24h + refreshToken 7d，401 无感刷新，Token 版本号机制使旧 Token 可主动失效 |
 | 跨域 | `config.cors` | 反射请求 Origin 并允许携带凭证，配合前端 `withCredentials` |
 
 > 安全提醒：`config.local.ts` 与 `.env*` 均已被 `.gitignore` 忽略，密钥严禁写入 `config.default.ts` 等会提交的源码文件。

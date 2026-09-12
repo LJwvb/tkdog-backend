@@ -1,6 +1,7 @@
 import { Context, EggAppConfig, EggAppInfo, PowerPartial } from 'egg';
 import { randomBytes } from 'crypto';
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Egg config 导出函数签名要求保留 appInfo 形参
 export default (_appInfo: EggAppInfo) => {
   const config = {} as PowerPartial<EggAppConfig>;
 
@@ -24,17 +25,19 @@ export default (_appInfo: EggAppInfo) => {
   };
   config.mysql = {
     // 单数据库信息配置
+    // 部署时通过环境变量注入，避免数据库密码写进会提交的源码文件；
+    // 未设置时回退到本地开发默认值（127.0.0.1 / root / 空密码 / tkdog）。
     client: {
       // host
-      host: '127.0.0.1',
+      host: process.env.DB_HOST || '127.0.0.1',
       // 端口号
-      port: '3306',
+      port: process.env.DB_PORT || '3306',
       // 用户名
-      user: 'root',
+      user: process.env.DB_USER || 'root',
       // 密码
-      password: '',
+      password: process.env.DB_PASSWORD || '',
       // 数据库名
-      database: 'tkdog',
+      database: process.env.DB_NAME || 'tkdog',
       // 连接字符集：必须 utf8mb4 才能正常存取 emoji（4 字节字符），
       // node-mysql 默认是 utf8(3字节)，会导致评论表情被截断/报错。
       // egg-mysql 的 EggMySQLClientOption 类型未声明 charset，这里用交叉类型补上。
@@ -79,6 +82,16 @@ export default (_appInfo: EggAppInfo) => {
       max: 30, // 每用户每分钟最多 30 次
     },
   };
+
+  // GitHub OAuth 第三方登录
+  // 本地开发在 config/config.local.ts（已 gitignore）配置；
+  // 生产环境通过环境变量注入（config.local.ts 不参与生产构建）。
+  // 未配置时前端不显示 GitHub 登录按钮，不影响账号密码登录。
+  config.githubOAuth = {
+    clientId: process.env.GITHUB_CLIENT_ID || '',
+    clientSecret: process.env.GITHUB_CLIENT_SECRET || '',
+    redirectUri: process.env.GITHUB_REDIRECT_URI || 'http://localhost:5173',
+  } as any;
 
   // the return config will combines to EggAppConfig
   return {

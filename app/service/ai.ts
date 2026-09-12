@@ -573,7 +573,7 @@ export default class ai extends Service {
    * 作为敏感词审核的补充，识别不含明确敏感词的违规表述
    * @param content 待审核内容
    * @param scene 场景：comment / feedback
-   * @return { passed: boolean, reason?: string, category?: string }
+   * @return 审核结果对象；passed 表示是否通过，reason 为拦截原因，category 为违规分类
    */
   public async checkContent(
     content: string,

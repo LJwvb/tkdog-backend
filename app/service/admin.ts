@@ -2,6 +2,7 @@
 import { Service } from 'egg';
 import bcrypt from 'bcryptjs';
 import { getNowFormatDate, getSubjectName } from '../utils';
+import { effectiveConsecutiveDays } from './checkin';
 
 interface IChkQuestions {
   id: number | string; // 题目ID
@@ -94,8 +95,8 @@ export default class admin extends Service {
     try {
       const page = Number(currentPage) || 1;
       const size = Number(pageSize) || 10;
-      // 排序白名单（防 SQL 注入）
-      const allowedSort = [ 'userId', 'integral', 'ai_credit', 'credit_exchanged', 'consecutive_days', 'total_checkin', 'ctime', 'last_login_time' ];
+      // 排序白名单（防 SQL 注入）；last_active_at 反映真实活跃，last_login_time 反映主动登录时间
+      const allowedSort = [ 'userId', 'integral', 'ai_credit', 'credit_exchanged', 'consecutive_days', 'total_checkin', 'ctime', 'last_login_time', 'last_active_at' ];
       const sortField = allowedSort.includes(orderBy) ? orderBy : 'userId';
       const sortDir = String(orderDir || '').toLowerCase() === 'ascending' ? 'ASC' : 'DESC';
 
@@ -196,11 +197,17 @@ export default class admin extends Service {
           // 积分直接读落库字段 user.integral，答对题数用于展示
           item.correct_ques_num = correctMap.get(Number(item.userId)) || 0;
           item.integral = Number(item.integral) || 0;
+          // 连续打卡：与用户端使用同一失效判定，避免长期未打卡时管理端展示库中残值
+          item.consecutive_days = effectiveConsecutiveDays(
+            item.last_checkin_date,
+            item.consecutive_days,
+          );
         } else {
           item.upload_ques_num = 0;
           item.like_ques_num = 0;
           item.approvedNums = 0;
           item.integral = 0;
+          item.consecutive_days = 0;
         }
         // 不向前端暴露密码
         delete item.password;
@@ -247,6 +254,12 @@ export default class admin extends Service {
         ),
       ]);
 
+      // 活跃用户：按 last_active_at 聚合（auth 中间件节流写入的时间，最贴近"真实使用时间"）
+      // 排除 is_deleted=1 的账号，避免统计到已删除用户
+      const activeRows: any = await app.mysql.query(
+        "SELECT DATE_FORMAT(last_active_at, '%Y-%m-%d') AS d, COUNT(*) AS c FROM user WHERE last_active_at IS NOT NULL AND is_deleted = 0 GROUP BY DATE_FORMAT(last_active_at, '%Y-%m-%d')",
+      );
+
       const one = async (sql: string): Promise<number> => {
         const rows: any = await app.mysql.query(sql);
         return Number(rows?.[0]?.c) || 0;
@@ -265,6 +278,16 @@ export default class admin extends Service {
         ),
         pendingFeedback: await one(
           'SELECT COUNT(*) AS c FROM question_feedback WHERE is_resolved = 0',
+        ),
+        // 活跃用户：按 last_active_at 区间统计
+        activeToday: await one(
+          'SELECT COUNT(*) AS c FROM user WHERE is_deleted = 0 AND last_active_at >= CURDATE()',
+        ),
+        active7d: await one(
+          'SELECT COUNT(*) AS c FROM user WHERE is_deleted = 0 AND last_active_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)',
+        ),
+        active30d: await one(
+          'SELECT COUNT(*) AS c FROM user WHERE is_deleted = 0 AND last_active_at >= DATE_SUB(CURDATE(), INTERVAL 29 DAY)',
         ),
       };
 
@@ -305,6 +328,7 @@ export default class admin extends Service {
           uploads: mapCount(questionRows),
           papers: mapCount(paperRows),
           answers: mapCount(answerRows),
+          activeUsers: mapCount(activeRows),
         },
         totals,
         subjectDist,

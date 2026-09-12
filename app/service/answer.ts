@@ -179,7 +179,7 @@ function computeQuestionScores(questions: any[]): number[] {
     weights.reduce((s, w) => s + w, 0) || questions.length || 1;
   const ideals = weights.map(w => (100 * w) / totalWeight);
   const bases = ideals.map(v => Math.floor(v));
-  let remainder = 100 - bases.reduce((s, b) => s + b, 0);
+  const remainder = 100 - bases.reduce((s, b) => s + b, 0);
   // 余数按小数部分从大到小分配，保证每题为整数且总和恒等于 100
   const order = ideals
     .map((v, i) => ({ i, frac: v - bases[i] }))
@@ -270,7 +270,7 @@ export default class answer extends Service {
       // 客观题得分合计（整数）；主观题待 AI 批改后由 applyAiGrade 累加
       const score = detail.reduce((sum, d) => sum + (d.score || 0), 0);
 
-      let recordId: number = 0;
+      let recordId = 0;
       const conn = await app.mysql.beginTransaction();
       try {
         const recordRes: any = await conn.insert('paper_record', {
@@ -409,7 +409,7 @@ export default class answer extends Service {
     // 主观题首次判对时 +1 积分（避免重复加分）
     const wasCorrect = Number(ar?.is_correct) === 1;
     if (isCorrect && !wasCorrect && ar?.user_id) {
-      await app.mysql.query('UPDATE user SET integral = integral + 1 WHERE userId = ?', [ar.user_id]);
+      await app.mysql.query('UPDATE user SET integral = integral + 1 WHERE userId = ?', [ ar.user_id ]);
     }
 
     await app.mysql.update(

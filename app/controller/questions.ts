@@ -285,7 +285,7 @@ export default class questions extends Controller {
   // 游客场景下剔除题目对象中的答案字段
   private stripAnswerList(list: any): any {
     if (this.isAnswerVisible() || !Array.isArray(list)) return list;
-    list.forEach((item) => {
+    list.forEach(item => {
       if (item && typeof item === 'object') {
         delete item.answer;
       }
