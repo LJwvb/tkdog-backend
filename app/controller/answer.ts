@@ -74,6 +74,10 @@ export default class answer extends Controller {
       Number(questionId),
       String(userAnswer ?? ''),
     );
+    if (!outcome) {
+      // AI 调用失败（超时/服务异常）：返还本次已扣额度，避免用户白扣
+      await ctx.service.ai.refundCredit(ctx.currentUserId(), 1);
+    }
     if (outcome) {
       // 判分结果落库并重算整卷统计（recordId 为交卷返回的 paper_record.id）
       let stats: any = null;
@@ -148,6 +152,9 @@ export default class answer extends Controller {
             await ctx.service.answer.applyAiGrade(Number(recordId), o.questionId, o.score);
           }
         }
+      } else {
+        // 该批 AI 调用失败：返还本批已扣的 1 次额度
+        await ctx.service.ai.refundCredit(ctx.currentUserId(), 1);
       }
     }
     // 取最终统计

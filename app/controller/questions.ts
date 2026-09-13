@@ -1,5 +1,6 @@
 import { Controller } from 'egg';
 import { getNowFormatDate } from '../utils';
+import { rateLimit } from '../utils/rateLimit';
 
 export default class questions extends Controller {
   // 获取审核后的题目
@@ -188,6 +189,11 @@ export default class questions extends Controller {
   // 点赞题目
   public async likeQuestions() {
     const { ctx } = this;
+    // 频控：每 IP 每分钟最多 20 次点赞（点赞和取消点赞共用一个桶，确保总请求受限）
+    if (!rateLimit(`${ctx.ip}:like`, { windowMs: 60_000, max: 20 })) {
+      ctx.fail('操作太频繁，请稍后再试~');
+      return;
+    }
     const { id } = ctx.request.body;
     if (!id) {
       ctx.fail('请填写完整信息~');
@@ -211,6 +217,10 @@ export default class questions extends Controller {
   // 取消点赞题目
   public async cancelLikeQuestions() {
     const { ctx } = this;
+    if (!rateLimit(`${ctx.ip}:like`, { windowMs: 60_000, max: 20 })) {
+      ctx.fail('操作太频繁，请稍后再试~');
+      return;
+    }
     const { id } = ctx.request.body;
     if (!id) {
       ctx.fail('请填写完整信息~');
@@ -234,6 +244,11 @@ export default class questions extends Controller {
   // 浏览数
   public async addBrowsesNum() {
     const { ctx } = this;
+    // 频控：每 IP 每分钟最多 60 次浏览
+    if (!rateLimit(`${ctx.ip}:browse`, { windowMs: 60_000, max: 60 })) {
+      ctx.fail('操作太频繁，请稍后再试~');
+      return;
+    }
     const { id } = ctx.request.body;
     if (!id) {
       ctx.fail('请填写完整信息~');

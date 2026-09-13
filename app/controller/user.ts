@@ -185,8 +185,9 @@ export default class User extends Controller {
     const userInfoUserName = await ctx.service.user.getUserInfo({
       username,
     });
-    // 默认头像：用 DiceBear 卡通头像，随机 seed 保证每个新用户头像不同
-    const randomSeed = Math.random().toString(36).slice(2, 10);
+    // 默认头像：用 DiceBear 卡通头像，随机 seed + 时间戳避免同一毫秒注册导致头像重复
+    const randomSeed =
+      Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     const defaultAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${randomSeed}`;
 
     if (!email || !password) {

@@ -6,11 +6,11 @@ export default class follow extends Service {
     const { app } = this;
     try {
       if (followerId === followedId) return null;
-      const result = await app.mysql.insert('user_follow', {
-        follower_id: followerId,
-        followed_id: followedId,
-        create_time: new Date(),
-      });
+      // INSERT IGNORE 幂等：重复关注（含并发双击）不报错、不产生重复行
+      const result: any = await app.mysql.query(
+        'INSERT IGNORE INTO user_follow (follower_id, followed_id, create_time) VALUES (?, ?, NOW())',
+        [ followerId, followedId ],
+      );
       return result;
     } catch (err) {
       return null;

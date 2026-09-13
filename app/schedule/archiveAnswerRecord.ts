@@ -74,6 +74,8 @@ export default class ArchiveAnswerRecord extends Subscription {
           await conn.commit();
           migrated += rows.length;
           app.logger.info(`[archiveAnswerRecord] 已归档 ${migrated}/${total} 条`);
+          // 最后一批不足 batchSize 时提前退出，避免多一次空查询
+          if (rows.length < batchSize) break;
         } catch (err) {
           await conn.rollback();
           app.logger.error('[archiveAnswerRecord] 批次迁移失败，回滚:', err);

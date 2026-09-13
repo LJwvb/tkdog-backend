@@ -89,11 +89,6 @@ export default class questions extends Service {
           subjectID: subjectIDParams,
           is_deleted: 0,
         });
-        // catalogID 语义：0=最新（默认） 1=热门（浏览数超阈值自动提升）
-        // 一次性提升热门题（浏览数超阈值），避免逐条 UPDATE
-        await app.mysql.query(
-          'UPDATE questions SET catalogID = 1 WHERE browses_num > 10 AND catalogID = 0 AND is_deleted = 0',
-        );
 
         return {
           result,
@@ -111,19 +106,18 @@ export default class questions extends Service {
           homeSubjectList.push(item);
         });
 
-        const chkStateQuestion: any = await app.mysql.select('questions', {
-          where: {
-            chkState: 1,
-            is_deleted: 0,
-          },
+        // 只取 DISTINCT 科目/章节，避免全表拉取所有已审核题目
+        const subjectRows: any = await app.mysql.query(
+          'SELECT DISTINCT subjectID FROM questions WHERE chkState = 1 AND is_deleted = 0 AND subjectID IS NOT NULL ORDER BY subjectID',
+        );
+        subjectRows.forEach((item: any) => {
+          subjectIdList.push(Number(item.subjectID));
         });
-        chkStateQuestion.forEach((item: any) => {
-          if (subjectIdList.indexOf(item.subjectID) === -1) {
-            subjectIdList.push(item.subjectID);
-          }
-          if (catalogIdList.indexOf(item.catalogID) === -1) {
-            catalogIdList.push(item.catalogID);
-          }
+        const catalogRows: any = await app.mysql.query(
+          'SELECT DISTINCT catalogID FROM questions WHERE chkState = 1 AND is_deleted = 0 AND catalogID IS NOT NULL ORDER BY catalogID',
+        );
+        catalogRows.forEach((item: any) => {
+          catalogIdList.push(Number(item.catalogID));
         });
         subjectIdList
           .sort((a: any, b: any) => a - b)
@@ -194,45 +188,48 @@ export default class questions extends Service {
     return Boolean(question && Number(question.chkState) === 1);
   }
 
-  // 点赞题目
+  // 点赞题目（幂等：INSERT IGNORE + affectedRows 决定是否 +1）
   public async likeQuestions(params) {
     const { app } = this;
     const { id, userId } = params;
+    if (!userId) return null;
     try {
-      // 原子自增，避免并发下"先查后写"丢计数
-      const result: any = await app.mysql.query(
-        'UPDATE questions SET likes_num = likes_num + 1 WHERE id = ?',
-        [ id ],
+      // 用 INSERT IGNORE 避免主键冲突被 catch 吞错；affectedRows=1 表示新点赞
+      const ins: any = await app.mysql.query(
+        'INSERT IGNORE INTO user_like_question (user_id, question_id) VALUES (?, ?)',
+        [ userId, id ],
       );
-      // 记录点赞关系（关联表，直接使用 userId）
-      await app.mysql.insert('user_like_question', {
-        user_id: userId,
-        question_id: id,
-      });
-
-      return result;
+      if (ins.affectedRows > 0) {
+        await app.mysql.query(
+          'UPDATE questions SET likes_num = likes_num + 1 WHERE id = ?',
+          [ id ],
+        );
+      }
+      return ins;
     } catch (err) {
+      this.ctx.logger.warn('[questions.likeQuestions]', (err as Error).message);
       return null;
     }
   }
-  // 取消点赞题目
+  // 取消点赞题目（幂等：DELETE + affectedRows 决定是否 -1）
   public async cancelLikeQuestions(params) {
     const { app } = this;
     const { id, userId } = params;
+    if (!userId) return null;
     try {
-      // 原子自减，并用 GREATEST 保证不出现负数
-      const result: any = await app.mysql.query(
-        'UPDATE questions SET likes_num = GREATEST(likes_num - 1, 0) WHERE id = ?',
-        [ id ],
+      const del: any = await app.mysql.query(
+        'DELETE FROM user_like_question WHERE user_id = ? AND question_id = ?',
+        [ userId, id ],
       );
-      // 删除点赞关系（关联表，直接使用 userId）
-      await app.mysql.delete('user_like_question', {
-        user_id: userId,
-        question_id: id,
-      });
-
-      return result;
+      if (del.affectedRows > 0) {
+        await app.mysql.query(
+          'UPDATE questions SET likes_num = GREATEST(likes_num - 1, 0) WHERE id = ?',
+          [ id ],
+        );
+      }
+      return del;
     } catch (err) {
+      this.ctx.logger.warn('[questions.cancelLikeQuestions]', (err as Error).message);
       return null;
     }
   }
@@ -241,8 +238,9 @@ export default class questions extends Service {
     const { app } = this;
     const { id } = params;
     try {
+      // 浏览 +1 并顺手提升热门：跨过阈值时自动置 catalogID=1（原全表 UPDATE 挪到这里单行完成）
       const result: any = await app.mysql.query(
-        'UPDATE questions SET browses_num = browses_num + 1 WHERE id = ?',
+        'UPDATE questions SET browses_num = browses_num + 1, catalogID = IF(catalogID = 0 AND browses_num >= 10, 1, catalogID) WHERE id = ?',
         [ id ],
       );
       return result;
@@ -250,20 +248,27 @@ export default class questions extends Service {
       return null;
     }
   }
-  // 上传题目
+  // 上传题目（事务：插入题目 + 上传关系 + 积分，任一步失败全部回滚）
   public async uploadQuestions(params: IUploadQuestions) {
     const { app } = this;
     try {
       const { userId, ...questionData } = params;
-      const result: any = await app.mysql.insert('questions', questionData);
-      // 记录上传关系（关联表，直接使用 userId）
-      await app.mysql.insert('user_upload_question', {
-        user_id: userId,
-        question_id: result.insertId,
-      });
-      // 上传题目 +2 积分（落库）
-      await app.mysql.query('UPDATE user SET integral = integral + 2 WHERE userId = ?', [ userId ]);
-      return result;
+      const conn = await app.mysql.beginTransaction();
+      try {
+        const result: any = await conn.insert('questions', questionData);
+        // 记录上传关系（关联表，直接使用 userId）
+        await conn.insert('user_upload_question', {
+          user_id: userId,
+          question_id: result.insertId,
+        });
+        // 上传题目 +2 积分（落库）
+        await conn.query('UPDATE user SET integral = integral + 2 WHERE userId = ?', [ userId ]);
+        await conn.commit();
+        return result;
+      } catch (e) {
+        await conn.rollback();
+        throw e;
+      }
     } catch (err) {
       return null;
     }

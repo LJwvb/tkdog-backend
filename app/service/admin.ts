@@ -3,6 +3,7 @@ import { Service } from 'egg';
 import bcrypt from 'bcryptjs';
 import { getNowFormatDate, getSubjectName } from '../utils';
 import { effectiveConsecutiveDays } from './checkin';
+import { tokenVersionCache } from '../utils/tokenVersionCache';
 
 interface IChkQuestions {
   id: number | string; // 题目ID
@@ -534,17 +535,20 @@ export default class admin extends Service {
   public async deleteQuestions(params) {
     const { app } = this;
     const { id } = params;
+    const conn = await app.mysql.beginTransaction();
     try {
-      await app.mysql.update('questions', { is_deleted: 1 }, { where: { id } });
-      await app.mysql.update(
+      await conn.update('questions', { is_deleted: 1 }, { where: { id } });
+      await conn.update(
         'comment',
         { is_deleted: 1 },
         { where: { question_id: id } },
       );
       // 从所有试卷中剔除该题
-      await app.mysql.delete('paper_question', { question_id: id });
+      await conn.delete('paper_question', { question_id: id });
+      await conn.commit();
       return { success: true };
     } catch (err) {
+      await conn.rollback();
       return null;
     }
   }
@@ -678,6 +682,8 @@ export default class admin extends Service {
         'UPDATE user SET is_deleted = 1, token_version = token_version + 1 WHERE userId = ?',
         [ userId ],
       );
+      // 主动清除 tokenVersionCache（软删除/彻底删除共用路径）
+      tokenVersionCache.clear(Number(userId));
       return result;
     } catch (err) {
       return null;

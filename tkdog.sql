@@ -15524,10 +15524,10 @@ CREATE TABLE `comment` (
   `is_deleted` tinyint(1) NOT NULL DEFAULT 0,
   `images` text DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `idx_comment_question` (`question_id`),
   KEY `idx_question_id` (`question_id`),
   KEY `idx_user_id` (`user_id`),
-  KEY `idx_status` (`status`)
+  KEY `idx_status` (`status`),
+  KEY `idx_parent_id` (`parent_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3672 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -19997,8 +19997,7 @@ CREATE TABLE `notification` (
   `comment_id` int(11) DEFAULT NULL COMMENT '关联评论ID',
   PRIMARY KEY (`id`),
   KEY `idx_notification_user` (`user_id`),
-  KEY `idx_user_id` (`user_id`),
-  KEY `idx_is_read` (`is_read`)
+  KEY `idx_user_read` (`user_id`,`is_read`)
 ) ENGINE=InnoDB AUTO_INCREMENT=41 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -29170,9 +29169,7 @@ CREATE TABLE `questions` (
   `updateUser` varchar(255) DEFAULT NULL COMMENT '修改人',
   PRIMARY KEY (`id`),
   KEY `idx_questions_filter` (`subjectID`,`questionType`,`chkState`),
-  KEY `idx_subject_id` (`subjectID`),
-  KEY `idx_question_type` (`questionType`),
-  KEY `idx_chk_state` (`chkState`)
+  KEY `idx_catalog_subject` (`catalogID`,`subjectID`,`is_deleted`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1096 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
