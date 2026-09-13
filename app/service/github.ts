@@ -215,9 +215,13 @@ export default class Github extends Service {
     const email = githubUser.email || '';
 
     try {
-      // 1. 按 github_id 查用户
-      let user: any = await app.mysql.get('user', { github_id: githubId, is_deleted: 0 });
+      // 1. 按 github_id 查用户（不过滤软删除：否则已删用户再登录会走到 INSERT，撞 uk_github_id 唯一键）
+      let user: any = await app.mysql.get('user', { github_id: githubId });
 
+      if (user && user.is_deleted === 1) {
+        // 账号已被管理端删除（软删除=可恢复的禁用态）：拒绝登录，由 controller 给明确提示
+        return { deleted: true };
+      }
       if (user) {
         // 已有账号，更新头像和最后登录时间
         await app.mysql.update(
@@ -231,7 +235,11 @@ export default class Github extends Service {
 
       // 2. 如果 GitHub 账号有邮箱，尝试按邮箱匹配已有账号
       if (email) {
-        user = await app.mysql.get('user', { email, is_deleted: 0 });
+        user = await app.mysql.get('user', { email });
+        if (user && user.is_deleted === 1) {
+          // 邮箱对应的账号已被删除：同样拒绝激活
+          return { deleted: true };
+        }
         if (user) {
           // 绑定 github_id 到已有账号
           await app.mysql.update(
@@ -287,6 +295,13 @@ export default class Github extends Service {
       return null;
     } catch (err) {
       this.ctx.logger.error('[GitHub OAuth] loginOrRegister error:', err);
+      // 兜底：INSERT 撞 uk_github_id（并发注册或历史脏数据）→ 再查一次，给出准确结果而非模糊异常
+      if ((err as any)?.code === 'ER_DUP_ENTRY') {
+        const dup: any = await app.mysql.get('user', { github_id: githubId });
+        if (dup) {
+          return dup.is_deleted === 1 ? { deleted: true } : dup;
+        }
+      }
       return null;
     }
   }

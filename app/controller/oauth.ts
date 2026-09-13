@@ -85,6 +85,12 @@ export default class OAuth extends Controller {
     ctx.logger.info('[OAuth githubCallback] 查/建本地账号...');
     const user = await ctx.service.github.loginOrRegister(githubUser);
     ctx.logger.info('[OAuth githubCallback] 本地用户:', user ? { userId: user.userId, username: user.username, phone: user.phone } : 'null');
+    if (user && (user as any).deleted) {
+      // 账号被管理端软删除：明确告知，而不是笼统的"创建或查询异常"
+      ctx.logger.warn('[OAuth githubCallback] 登录被拒：账号已被删除');
+      ctx.fail('该账号已被删除，请联系管理员恢复');
+      return;
+    }
     if (!user) {
       ctx.logger.error('[OAuth githubCallback] 账号创建或查询异常');
       ctx.fail('登录失败：账号创建或查询异常');
