@@ -217,8 +217,8 @@ export default class admin extends Controller {
     const result = purge
       ? await ctx.service.admin.purgePaper(paperId)
       : await ctx.service.admin.deletePaper({
-          paperId,
-        });
+        paperId,
+      });
     if (result) {
       ctx.success(null, purge ? '已彻底删除~' : '删除成功~');
     } else {
@@ -232,8 +232,8 @@ export default class admin extends Controller {
     const result = purge
       ? await ctx.service.admin.purgeUser(userId)
       : await ctx.service.admin.deleteUser({
-          userId,
-        });
+        userId,
+      });
     if (result) {
       ctx.success(null, purge ? '已彻底删除~' : '删除成功~');
     } else {

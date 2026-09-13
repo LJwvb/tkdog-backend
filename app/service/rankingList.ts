@@ -14,8 +14,12 @@ export default class RankingList extends Service {
 
       // 1. 只查未删除用户的基本信息（过滤已删除用户）
       //    打卡相关字段一并取出：checkin 明细表已废弃，打卡数据统一存 user 表
+      // 只查有活跃数据的用户（打卡>0 / 有上传 / 有答对），避免全表扫描
       const users: any = await app.mysql.query(
-        'SELECT userId, username, avatar, total_checkin, last_checkin_time FROM user WHERE is_deleted = 0',
+        'SELECT userId, username, avatar, total_checkin, last_checkin_time FROM user ' +
+        'WHERE is_deleted = 0 AND (total_checkin > 0 OR ' +
+        'EXISTS (SELECT 1 FROM user_upload_question uq WHERE uq.user_id = user.userId) OR ' +
+        'EXISTS (SELECT 1 FROM answer_record ar WHERE ar.user_id = user.userId AND ar.is_correct = 1))',
       );
 
       // 2. 批量聚合：上传/审核通过/获赞（替代原 N+1 逐个 computePoints）

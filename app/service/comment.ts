@@ -54,6 +54,14 @@ export default class comment extends Service {
         // 用户名/头像不再冗余存储，展示时从 user 表关联取
       };
       if (parentId) {
+        // 反查父评论：必须存在且属于同一题目，避免悬空回复 / 跨题挂靠
+        const parent: any = await app.mysql.get('comment', {
+          id: Number(parentId),
+          is_deleted: 0,
+        });
+        if (!parent || Number(parent.question_id) !== Number(questionId)) {
+          return null;
+        }
         data.parent_id = Number(parentId);
       }
       // 评论图片：只保留本站上传的图片 URL
@@ -351,18 +359,36 @@ export default class comment extends Service {
         if (!target) return null;
         // 只允许置顶顶层评论（回复类评论置顶后无法排到最前）
         if (target.parent_id) return null;
-        // 同题下已有其它置顶评论：返回冲突，交由前端提示先取消原置顶
-        const existing: any = await app.mysql.query(
-          'SELECT id FROM comment WHERE question_id = ? AND is_pinned = 1 AND id != ? AND is_deleted = 0 LIMIT 1',
-          [ target.question_id, id ],
-        );
-        if (existing && existing.length > 0) {
-          return { conflict: true, existingId: existing[0].id };
+        // 事务 + FOR UPDATE 锁定同题置顶行，防止两个管理员并发置顶不同评论
+        const conn = await app.mysql.beginTransaction();
+        try {
+          await conn.query(
+            'SELECT id FROM comment WHERE question_id = ? AND is_pinned = 1 AND id != ? AND is_deleted = 0 FOR UPDATE',
+            [ target.question_id, id ],
+          );
+          const existing: any = await conn.query(
+            'SELECT id FROM comment WHERE question_id = ? AND is_pinned = 1 AND id != ? AND is_deleted = 0 LIMIT 1',
+            [ target.question_id, id ],
+          );
+          if (existing && existing.length > 0) {
+            await conn.rollback();
+            return { conflict: true, existingId: existing[0].id };
+          }
+          await conn.update(
+            'comment',
+            { is_pinned: 1 },
+            { where: { id } },
+          );
+          await conn.commit();
+          return { success: true };
+        } catch (e) {
+          await conn.rollback();
+          throw e;
         }
       }
       const result = await app.mysql.update(
         'comment',
-        { is_pinned: pinned ? 1 : 0 },
+        { is_pinned: 0 },
         { where: { id } },
       );
       return result;

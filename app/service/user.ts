@@ -3,6 +3,7 @@ import { createMathExpr } from 'svg-captcha';
 import md5 from 'md5';
 import bcrypt from 'bcryptjs';
 import { getNowFormatDate } from '../utils';
+import { tokenVersionCache } from '../utils/tokenVersionCache';
 
 interface LoginParams {
   password: string; // 密码
@@ -141,6 +142,8 @@ export default class User extends Service {
         'UPDATE user SET password = ?, token_version = token_version + 1 WHERE userId = ?',
         [ hashed, user.userId ],
       );
+      // 主动清除 tokenVersionCache，避免最长 60s 缓存内旧 token 仍可使用
+      tokenVersionCache.clear(user.userId);
       return result;
     } catch (err) {
       return null;

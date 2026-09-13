@@ -55,15 +55,34 @@ const rateWindows = new Map<string, number[]>();
 const contentCheckCache = new Map<string, { result: any; expireAt: number }>();
 
 export default class ai extends Service {
-  // 检查并扣减 AI 额度（原子操作：先查再减）
+  // 检查并扣减 AI 额度（原子操作：条件 UPDATE 避免并发透支为负数）
   public async consumeCredit(userId: number | undefined, cost = 1): Promise<boolean> {
     if (!userId) return false;
     const { app } = this;
-    const user: any = await app.mysql.get('user', { userId });
-    const credit = Number(user?.ai_credit ?? 0);
-    if (credit < cost) return false;
-    await app.mysql.update('user', { ai_credit: credit - cost }, { where: { userId } });
-    return true;
+    try {
+      // 条件 WHERE ai_credit >= cost 保证余额不足时 affectedRows=0，原子防并发透支
+      const result: any = await app.mysql.query(
+        'UPDATE user SET ai_credit = ai_credit - ? WHERE userId = ? AND ai_credit >= ?',
+        [ cost, userId, cost ],
+      );
+      return result.affectedRows === 1;
+    } catch (err) {
+      this.ctx.logger.error('[ai.consumeCredit]', (err as Error).message);
+      return false;
+    }
+  }
+
+  // 返还 AI 额度（兜底）：AI 调用失败时退回本次已扣的额度
+  public async refundCredit(userId: number | undefined, cost = 1): Promise<void> {
+    if (!userId || cost <= 0) return;
+    try {
+      await this.app.mysql.query(
+        'UPDATE user SET ai_credit = ai_credit + ? WHERE userId = ?',
+        [ cost, userId ],
+      );
+    } catch (err) {
+      this.ctx.logger.error('[ai.refundCredit]', (err as Error).message);
+    }
   }
 
   // 查询剩余 AI 额度
@@ -903,17 +922,15 @@ export default class ai extends Service {
     }
     if (!this.isConfigured()) return null;
 
-    // 聚合数据
-    const papers: any[] = await app.mysql.select('paper_record', {
-      where: { user_id: userId },
-    });
-    papers.sort((a, b) => b.id - a.id);
-    const recentPapers = papers.slice(0, 10);
-    const answers: any[] = await app.mysql.select('answer_record', {
-      where: { user_id: userId },
-    });
-    answers.sort((a, b) => b.id - a.id);
-    const recentAnswers = answers.slice(0, 200);
+    // 聚合数据：SQL 层直接取最近记录，避免全表拉取该用户全部答题/试卷数据
+    const recentPapers: any[] = (await app.mysql.query(
+      'SELECT * FROM paper_record WHERE user_id = ? ORDER BY id DESC LIMIT 10',
+      [ userId ],
+    )) as any[];
+    const recentAnswers: any[] = (await app.mysql.query(
+      'SELECT * FROM answer_record WHERE user_id = ? ORDER BY id DESC LIMIT 200',
+      [ userId ],
+    )) as any[];
     const likeCount = await app.mysql.count('user_like_question', { user_id: userId });
     const favCount = await app.mysql.count('user_favorite_question', { user_id: userId });
     const uploadCount = await app.mysql.count('user_upload_question', { user_id: userId });

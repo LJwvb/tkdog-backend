@@ -167,10 +167,20 @@ export default class paper extends Service {
           .split(',')
           .map((x: string) => x.trim())
           .filter((x: string) => x !== '');
-        for (let i = 0; i < idList.length; i++) {
+        // 校验题目有效性：只保留存在且未删除的题目，避免试卷引用悬空题目
+        const validSet = new Set<number>();
+        if (idList.length) {
+          const validRows: any = await conn.query(
+            `SELECT id FROM questions WHERE id IN (${idList.map(() => '?').join(',')}) AND is_deleted = 0`,
+            idList,
+          );
+          validRows.forEach((r: any) => validSet.add(Number(r.id)));
+        }
+        const finalIds = idList.filter((x: string) => validSet.has(Number(x)));
+        for (let i = 0; i < finalIds.length; i++) {
           await conn.insert('paper_question', {
             paper_id: paperId,
-            question_id: Number(idList[i]),
+            question_id: Number(finalIds[i]),
             sort_order: i,
           });
         }

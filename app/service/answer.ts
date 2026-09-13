@@ -406,17 +406,23 @@ export default class answer extends Service {
     const earned = Math.max(0, Math.min(maxScore, Math.round((aiScore / 100) * maxScore)));
     const passScore = Number((this.config as any)?.aiJudge?.passScore) || 60;
     const isCorrect = aiScore >= passScore;
-    // 主观题首次判对时 +1 积分（避免重复加分）
-    const wasCorrect = Number(ar?.is_correct) === 1;
-    if (isCorrect && !wasCorrect && ar?.user_id) {
-      await app.mysql.query('UPDATE user SET integral = integral + 1 WHERE userId = ?', [ ar.user_id ]);
+    // 主观题首次判对时 +1 积分：用条件 UPDATE 保证并发下只加一次
+    // （只有 is_correct 从 0/NULL → 1 才 affectedRows=1，两个并发调用只有一个能加分）
+    if (isCorrect) {
+      const upd: any = await app.mysql.query(
+        'UPDATE answer_record SET is_correct = 1, score = ? WHERE record_id = ? AND question_id = ? AND (is_correct IS NULL OR is_correct = 0)',
+        [ earned, recordId, questionId ],
+      );
+      if (upd.affectedRows > 0 && ar?.user_id) {
+        await app.mysql.query('UPDATE user SET integral = integral + 1 WHERE userId = ?', [ ar.user_id ]);
+      }
+    } else {
+      await app.mysql.update(
+        'answer_record',
+        { is_correct: 0, score: earned },
+        { where: { record_id: recordId, question_id: questionId } },
+      );
     }
-
-    await app.mysql.update(
-      'answer_record',
-      { is_correct: isCorrect ? 1 : 0, score: earned },
-      { where: { record_id: recordId, question_id: questionId } },
-    );
 
     const rows: any = await app.mysql.query(
       'SELECT ' +

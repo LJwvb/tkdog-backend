@@ -4,6 +4,14 @@ import fs from 'fs';
 import path from 'path';
 import { getNowFormatDate } from '../utils';
 import bcrypt from 'bcryptjs';
+// 日志脱敏：替换 access_token / client_secret 等敏感字段值，避免明文入日志
+function maskSensitive(text: string): string {
+  return String(text).replace(
+    /("?(?:access_token|client_secret)"?\s*[:=]\s*"?)([^",}\s]{4,})/gi,
+    '$1***',
+  );
+}
+
 
 /**
  * GitHub OAuth 登录服务
@@ -50,23 +58,22 @@ export default class Github extends Service {
             'Content-Length': Buffer.byteLength(postData),
           },
           timeout: 15000,
-          rejectUnauthorized: false,
         },
         res => {
           let body = '';
           res.on('data', chunk => { body += chunk; });
           res.on('end', () => {
-            this.ctx.logger.info('[GitHub getAccessToken] HTTP status:', res.statusCode, 'body:', body);
+            this.ctx.logger.info('[GitHub getAccessToken] HTTP status:', res.statusCode, 'body:', maskSensitive(body));
             try {
               const data = JSON.parse(body);
               if (data.access_token) {
                 resolve(data.access_token);
               } else {
-                this.ctx.logger.error('[GitHub getAccessToken] 响应中无 access_token:', JSON.stringify(data));
+                this.ctx.logger.error('[GitHub getAccessToken] 响应中无 access_token:', maskSensitive(JSON.stringify(data)));
                 resolve(null);
               }
             } catch (e) {
-              this.ctx.logger.error('[GitHub getAccessToken] JSON 解析失败:', e, 'body:', body);
+              this.ctx.logger.error('[GitHub getAccessToken] JSON 解析失败:', e, 'body:', maskSensitive(body));
               resolve(null);
             }
           });
@@ -101,17 +108,16 @@ export default class Github extends Service {
             'User-Agent': 'tkdog-oauth',
           },
           timeout: 15000,
-          rejectUnauthorized: false,
         },
         res => {
           let body = '';
           res.on('data', chunk => { body += chunk; });
           res.on('end', () => {
-            this.ctx.logger.info('[GitHub getUserInfo] HTTP status:', res.statusCode, 'body:', body.substring(0, 500));
+            this.ctx.logger.info('[GitHub getUserInfo] HTTP status:', res.statusCode);
             try {
               resolve(JSON.parse(body));
             } catch (e) {
-              this.ctx.logger.error('[GitHub getUserInfo] JSON 解析失败:', e, 'body:', body);
+              this.ctx.logger.error('[GitHub getUserInfo] JSON 解析失败:', e, 'body:', maskSensitive(body));
               resolve(null);
             }
           });
@@ -137,24 +143,31 @@ export default class Github extends Service {
    */
   public async mirrorAvatar(avatarUrl: string, githubId: string): Promise<string> {
     if (!avatarUrl) return '';
-    const download = (urlStr: string, depth = 0): Promise<Buffer | null> =>
+    const download = (urlStr: string): Promise<Buffer | null> =>
       new Promise(resolve => {
-        if (depth > 2) { resolve(null); return; }
         try {
           const u = new URL(urlStr);
+          // SSRF 防护：hostname 必须在白名单内（GitHub/Gravatar 官方头像域）
+          const allowed = [ 'avatars.githubusercontent.com', 'gravatar.com' ];
+          const isGravatarSub = u.hostname.endsWith('.gravatar.com');
+          if (!allowed.includes(u.hostname) && !isGravatarSub) {
+            this.ctx.logger.warn('[GitHub mirrorAvatar] 非白名单域名，拒绝下载:', u.hostname);
+            resolve(null);
+            return;
+          }
           const req = https.get(
             {
               hostname: u.hostname,
               path: u.pathname + u.search,
               headers: { 'User-Agent': 'tkdog-oauth' },
               timeout: 15000,
-              rejectUnauthorized: false,
             },
             res => {
-              // GitHub 头像可能 302 重定向，跟一层
-              if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+              // 不跟随 redirect（避免被重定向到内网或被 MITM）
+              if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400) {
                 res.resume();
-                resolve(download(res.headers.location, depth + 1));
+                this.ctx.logger.warn('[GitHub mirrorAvatar] 拒绝 3xx redirect:', res.headers.location);
+                resolve(null);
                 return;
               }
               if (res.statusCode !== 200) { res.resume(); resolve(null); return; }

@@ -12,7 +12,7 @@ export default class OAuth extends Controller {
    */
   public async github() {
     const { ctx } = this;
-    ctx.logger.info('[OAuth github] 收到 GitHub 登录请求, session:', JSON.stringify(ctx.session));
+    ctx.logger.info('[OAuth github] 收到 GitHub 登录请求');
     const cfg = (ctx.app.config as any).githubOAuth;
 
     if (!cfg || !cfg.clientId || cfg.clientId === 'YOUR_GITHUB_CLIENT_ID') {
@@ -24,7 +24,7 @@ export default class OAuth extends Controller {
     // 生成 state 防 CSRF，存在 session 中
     const state = crypto.randomBytes(16).toString('hex');
     ctx.session.oauthState = state;
-    ctx.logger.info('[OAuth github] 生成 state:', state);
+    ctx.logger.info('[OAuth github] 已生成 state');
 
     const authUrl = ctx.service.github.getAuthUrl(state);
     ctx.logger.info('[OAuth github] 生成授权 URL:', authUrl);
@@ -41,7 +41,7 @@ export default class OAuth extends Controller {
     const { ctx } = this;
     const { code, state } = ctx.request.body;
     ctx.logger.info('[OAuth githubCallback] 收到回调请求, code:', code ? code.substring(0, 10) + '...' : 'null', 'state:', state);
-    ctx.logger.info('[OAuth githubCallback] 当前 session:', JSON.stringify(ctx.session));
+
 
     if (!code) {
       ctx.logger.error('[OAuth githubCallback] 缺少 code 参数');
@@ -51,7 +51,7 @@ export default class OAuth extends Controller {
 
     // 校验 state（防 CSRF）
     const savedState = ctx.session.oauthState;
-    ctx.logger.info('[OAuth githubCallback] savedState:', savedState, 'received state:', state);
+    ctx.logger.info('[OAuth githubCallback] state 校验中');
     if (!savedState || savedState !== state) {
       ctx.logger.error('[OAuth githubCallback] state 校验不通过');
       ctx.fail('授权失败：state 校验不通过，请重试');
