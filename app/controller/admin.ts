@@ -210,28 +210,32 @@ export default class admin extends Controller {
       ctx.fail('获取题目失败~');
     }
   }
-  // 删除试卷
+  // 删除试卷（purge=true 时彻底删除：物理删除试卷及其答题记录等关联数据）
   public async deletePaper() {
     const { ctx } = this;
-    const { paperId } = ctx.request.body;
-    const result = await ctx.service.admin.deletePaper({
-      paperId,
-    });
+    const { paperId, purge } = ctx.request.body;
+    const result = purge
+      ? await ctx.service.admin.purgePaper(paperId)
+      : await ctx.service.admin.deletePaper({
+          paperId,
+        });
     if (result) {
-      ctx.success(null, '删除成功~');
+      ctx.success(null, purge ? '已彻底删除~' : '删除成功~');
     } else {
       ctx.fail('删除失败,请重新删除~');
     }
   }
-  // 删除用户I
+  // 删除用户I（purge=true 时彻底删除：物理删除用户及其全部关联数据）
   public async deleteUser() {
     const { ctx } = this;
-    const { userId } = ctx.request.body;
-    const result = await ctx.service.admin.deleteUser({
-      userId,
-    });
+    const { userId, purge } = ctx.request.body;
+    const result = purge
+      ? await ctx.service.admin.purgeUser(userId)
+      : await ctx.service.admin.deleteUser({
+          userId,
+        });
     if (result) {
-      ctx.success(null, '删除成功~');
+      ctx.success(null, purge ? '已彻底删除~' : '删除成功~');
     } else {
       ctx.fail('删除失败,请重新删除~');
     }

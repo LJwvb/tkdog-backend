@@ -53,7 +53,7 @@ export default class feedback extends Service {
       }
       const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
       const result: any = await app.mysql.query(
-        'SELECT f.*, u.username, q.question FROM question_feedback f ' +
+        'SELECT f.*, IFNULL(u.username, \'已注销\') AS username, q.question FROM question_feedback f ' +
           'LEFT JOIN user u ON f.user_id = u.userId ' +
           'LEFT JOIN questions q ON f.question_id = q.id ' +
           whereSql + ' ORDER BY f.id DESC LIMIT ? OFFSET ?',

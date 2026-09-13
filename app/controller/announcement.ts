@@ -29,17 +29,19 @@ export default class announcement extends Controller {
       ctx.fail('发布失败~');
     }
   }
-  // 删除公告（管理员）
+  // 删除公告（管理员，purge=true 时彻底删除：物理删除不可恢复）
   public async remove() {
     const { ctx } = this;
-    const { id } = ctx.request.body;
+    const { id, purge } = ctx.request.body;
     if (!id) {
       ctx.fail('id不能为空~');
       return;
     }
-    const result = await ctx.service.announcement.remove(id);
+    const result = purge
+      ? await ctx.service.announcement.purge(id)
+      : await ctx.service.announcement.remove(id);
     if (result) {
-      ctx.success(null, '删除成功~');
+      ctx.success(null, purge ? '已彻底删除~' : '删除成功~');
     } else {
       ctx.fail('删除失败~');
     }

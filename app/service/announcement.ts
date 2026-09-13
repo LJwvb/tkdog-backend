@@ -68,4 +68,13 @@ export default class announcement extends Service {
       return null;
     }
   }
+  // 彻底删除公告（物理删除，不可恢复）
+  public async purge(id: number) {
+    const { app } = this;
+    try {
+      return await app.mysql.delete('announcement', { id });
+    } catch (err) {
+      return null;
+    }
+  }
 }

@@ -179,6 +179,7 @@ export default (app: Application) => {
   router.post('/restorePaper', adminAuth, controller.admin.restorePaper);
   router.post('/getDeletedUsers', adminAuth, controller.admin.getDeletedUsers);
   router.post('/restoreUser', adminAuth, controller.admin.restoreUser);
+  // 彻底删除（物理删除）复用 delete 接口的 purge 参数，无独立路由
   router.post('/deleteComment', adminAuth, controller.comment.deleteComment);
   router.post(
     '/getDeletedComments',

@@ -1,5 +1,7 @@
 import { Service } from 'egg';
 import * as https from 'https';
+import fs from 'fs';
+import path from 'path';
 import { getNowFormatDate } from '../utils';
 import bcrypt from 'bcryptjs';
 
@@ -128,13 +130,88 @@ export default class Github extends Service {
   }
 
   /**
+   * 把 GitHub 头像下载转存到本站静态目录，返回站内相对路径。
+   * 原因：avatars.githubusercontent.com 国内访问不稳定（无代理访客头像裂图），
+   * 转存到 app/public/uploads 后由本站 Nginx 直接提供。
+   * 下载失败时降级返回原 URL，不阻塞登录流程。
+   */
+  public async mirrorAvatar(avatarUrl: string, githubId: string): Promise<string> {
+    if (!avatarUrl) return '';
+    const download = (urlStr: string, depth = 0): Promise<Buffer | null> =>
+      new Promise(resolve => {
+        if (depth > 2) { resolve(null); return; }
+        try {
+          const u = new URL(urlStr);
+          const req = https.get(
+            {
+              hostname: u.hostname,
+              path: u.pathname + u.search,
+              headers: { 'User-Agent': 'tkdog-oauth' },
+              timeout: 15000,
+              rejectUnauthorized: false,
+            },
+            res => {
+              // GitHub 头像可能 302 重定向，跟一层
+              if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                res.resume();
+                resolve(download(res.headers.location, depth + 1));
+                return;
+              }
+              if (res.statusCode !== 200) { res.resume(); resolve(null); return; }
+              const chunks: Buffer[] = [];
+              res.on('data', c => chunks.push(c as Buffer));
+              res.on('end', () => resolve(Buffer.concat(chunks)));
+            },
+          );
+          req.on('error', e => {
+            this.ctx.logger.error('[GitHub mirrorAvatar] 下载错误:', e);
+            resolve(null);
+          });
+          req.on('timeout', () => {
+            this.ctx.logger.error('[GitHub mirrorAvatar] 下载超时');
+            (req as any).destroy();
+            resolve(null);
+          });
+        } catch (e) {
+          this.ctx.logger.error('[GitHub mirrorAvatar] URL 解析失败:', e);
+          resolve(null);
+        }
+      });
+
+    const buf = await download(avatarUrl);
+    // 空/超大（>5MB）直接降级用原 URL
+    if (!buf || buf.length === 0 || buf.length > 5 * 1024 * 1024) {
+      this.ctx.logger.warn('[GitHub mirrorAvatar] 下载失败或超限，降级使用原 URL:', avatarUrl);
+      return avatarUrl;
+    }
+    try {
+      const dir = path.join(this.app.baseDir, 'app/public/uploads');
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir);
+      }
+      // GitHub 头像多为 JPEG，按 magic bytes 定扩展名
+      const isPng = buf[0] === 0x89 && buf[1] === 0x50;
+      const isGif = buf.toString('ascii', 0, 3) === 'GIF';
+      const ext = isPng ? '.png' : isGif ? '.gif' : '.jpg';
+      const filename = `gh_${githubId}_${Date.now()}${ext}`;
+      fs.writeFileSync(path.join(dir, filename), buf);
+      this.ctx.logger.info('[GitHub mirrorAvatar] 头像已转存:', filename, `(${buf.length} bytes)`);
+      return `/public/uploads/${filename}`;
+    } catch (e) {
+      this.ctx.logger.error('[GitHub mirrorAvatar] 写文件失败，降级使用原 URL:', e);
+      return avatarUrl;
+    }
+  }
+
+  /**
    * 根据 GitHub 用户信息查/建账号，返回本地用户
    */
   public async loginOrRegister(githubUser: any): Promise<any | null> {
     const { app } = this;
     const githubId = String(githubUser.id);
     const username = githubUser.login || `github_${githubId}`;
-    const avatar = githubUser.avatar_url || '';
+    // 头像转存到本站（失败降级用 GitHub 原始 URL）
+    const avatar = await this.mirrorAvatar(githubUser.avatar_url || '', githubId);
     const email = githubUser.email || '';
 
     try {

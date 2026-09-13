@@ -775,4 +775,165 @@ export default class admin extends Service {
       return null;
     }
   }
+
+  // ===== 彻底删除（物理删除，事务保证原子性，不可恢复）=====
+  // 清理单道题目的全部关联数据（评论点赞/评论/试卷引用/点赞收藏/上传记录/AI解析/纠错/答题记录）
+  private async purgeQuestionRelations(
+    conn: any,
+    questionIds: number[],
+  ): Promise<void> {
+    if (!questionIds.length) return;
+    const comments: any = await conn.query(
+      'SELECT id FROM comment WHERE question_id IN (?)',
+      [ questionIds ],
+    );
+    const commentIds = comments.map((r: any) => r.id);
+    if (commentIds.length) {
+      await conn.query('DELETE FROM comment_like WHERE comment_id IN (?)', [
+        commentIds,
+      ]);
+      await conn.query('DELETE FROM comment WHERE id IN (?)', [ commentIds ]);
+    }
+    await conn.query('DELETE FROM paper_question WHERE question_id IN (?)', [
+      questionIds,
+    ]);
+    await conn.query('DELETE FROM user_like_question WHERE question_id IN (?)', [
+      questionIds,
+    ]);
+    await conn.query(
+      'DELETE FROM user_favorite_question WHERE question_id IN (?)',
+      [ questionIds ],
+    );
+    await conn.query(
+      'DELETE FROM user_upload_question WHERE question_id IN (?)',
+      [ questionIds ],
+    );
+    await conn.query('DELETE FROM ai_analysis WHERE question_id IN (?)', [
+      questionIds,
+    ]);
+    await conn.query('DELETE FROM question_feedback WHERE question_id IN (?)', [
+      questionIds,
+    ]);
+    await conn.query('DELETE FROM answer_record WHERE question_id IN (?)', [
+      questionIds,
+    ]);
+    await conn.query(
+      'DELETE FROM answer_record_archive WHERE question_id IN (?)',
+      [ questionIds ],
+    );
+  }
+  // 清理试卷的全部关联数据（题目关联/答题记录/AI试卷报告/作答记录）
+  private async purgePaperRelations(
+    conn: any,
+    paperIds: number[],
+  ): Promise<void> {
+    if (!paperIds.length) return;
+    await conn.query('DELETE FROM paper_question WHERE paper_id IN (?)', [
+      paperIds,
+    ]);
+    await conn.query('DELETE FROM answer_record WHERE paper_id IN (?)', [
+      paperIds,
+    ]);
+    await conn.query('DELETE FROM answer_record_archive WHERE paper_id IN (?)', [
+      paperIds,
+    ]);
+    // AI 试卷报告挂在 paper_record 上，用 join 一起删
+    await conn.query(
+      'DELETE ar FROM ai_paper_report ar INNER JOIN paper_record p ON ar.record_id = p.id WHERE p.paper_id IN (?)',
+      [ paperIds ],
+    );
+    await conn.query('DELETE FROM paper_record WHERE paper_id IN (?)', [
+      paperIds,
+    ]);
+  }
+  // 彻底删除题目（物理删除，连带评论等所有关联数据）
+  public async purgeQuestion(id: number) {
+    const { app } = this;
+    const conn = await app.mysql.beginTransaction();
+    try {
+      await this.purgeQuestionRelations(conn, [ Number(id) ]);
+      await conn.query('DELETE FROM questions WHERE id = ?', [ Number(id) ]);
+      await conn.commit();
+      return { success: true };
+    } catch (err) {
+      await conn.rollback();
+      return null;
+    }
+  }
+  // 彻底删除试卷（物理删除，连带答题记录等所有关联数据）
+  public async purgePaper(paperId: number) {
+    const { app } = this;
+    const conn = await app.mysql.beginTransaction();
+    try {
+      await this.purgePaperRelations(conn, [ Number(paperId) ]);
+      await conn.query('DELETE FROM examination_paper WHERE paper_id = ?', [
+        Number(paperId),
+      ]);
+      await conn.commit();
+      return { success: true };
+    } catch (err) {
+      await conn.rollback();
+      return null;
+    }
+  }
+  // 彻底删除用户（物理删除，连带其上传题目、试卷、评论、点赞、收藏、关注、通知、答题记录、AI报告）
+  public async purgeUser(userId: number) {
+    const { app } = this;
+    const uid = Number(userId);
+    const conn = await app.mysql.beginTransaction();
+    try {
+      // ===== 1. 保留内容：归属改为「已注销」，内容本体不删 =====
+      // 1.1 题目：creator 为冗余文本字段直接改写；creator_id 置空避免悬空引用
+      await conn.query(
+        "UPDATE questions SET creator = '已注销', creator_id = NULL WHERE creator_id = ?",
+        [ uid ],
+      );
+      // 1.2 试卷：author 为冗余文本字段直接改写；user_id 置空
+      await conn.query(
+        "UPDATE examination_paper SET author = '已注销', user_id = NULL WHERE user_id = ?",
+        [ uid ],
+      );
+      // 1.3 评论 / 题目反馈：user_id 置空，查询端用 IFNULL 显示「已注销」
+      await conn.query('UPDATE comment SET user_id = NULL WHERE user_id = ?', [
+        uid,
+      ]);
+      await conn.query(
+        'UPDATE question_feedback SET user_id = NULL WHERE user_id = ?',
+        [ uid ],
+      );
+      // user_upload_question 保留：仅作上传映射，查询端 JOIN 的是 questions，不依赖 user 表
+      // ===== 2. 个人数据：物理清除（答题记录、点赞、收藏、关注、通知等） =====
+      await conn.query('DELETE FROM comment_like WHERE user_id = ?', [ uid ]);
+      await conn.query('DELETE FROM user_like_question WHERE user_id = ?', [
+        uid,
+      ]);
+      await conn.query('DELETE FROM user_favorite_question WHERE user_id = ?', [
+        uid,
+      ]);
+      await conn.query('DELETE FROM answer_record WHERE user_id = ?', [ uid ]);
+      await conn.query('DELETE FROM answer_record_archive WHERE user_id = ?', [
+        uid,
+      ]);
+      await conn.query(
+        'DELETE ar FROM ai_paper_report ar INNER JOIN paper_record p ON ar.record_id = p.id WHERE p.user_id = ?',
+        [ uid ],
+      );
+      await conn.query('DELETE FROM paper_record WHERE user_id = ?', [ uid ]);
+      await conn.query('DELETE FROM ai_learning_report WHERE user_id = ?', [
+        uid,
+      ]);
+      await conn.query('DELETE FROM notification WHERE user_id = ?', [ uid ]);
+      await conn.query(
+        'DELETE FROM user_follow WHERE follower_id = ? OR followed_id = ?',
+        [ uid, uid ],
+      );
+      // ===== 3. 账号本体 =====
+      await conn.query('DELETE FROM user WHERE userId = ?', [ uid ]);
+      await conn.commit();
+      return { success: true };
+    } catch (err) {
+      await conn.rollback();
+      return null;
+    }
+  }
 }

@@ -143,4 +143,15 @@ export default class sensitiveWord extends Service {
       return null;
     }
   }
+  // 彻底删除违禁词（物理删除，不可恢复）
+  public async purge(id: number) {
+    const { app } = this;
+    try {
+      const result = await app.mysql.delete('sensitive_word', { id });
+      this.invalidateCache();
+      return result;
+    } catch (err) {
+      return null;
+    }
+  }
 }

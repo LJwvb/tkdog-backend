@@ -123,8 +123,8 @@ export default class comment extends Service {
 
         // 3. 这些题目的全部评论（顶层+回复，管理端含待审核，不含已删除）
         const list: any = await app.mysql.query(
-          'SELECT c.id, c.user_id, c.question_id, c.content, u.username, c.create_time, ' +
-            'c.parent_id, pu.username AS reply_username, c.status, c.is_pinned, c.images, u.avatar, q.question AS question_title ' +
+          'SELECT c.id, c.user_id, c.question_id, c.content, IFNULL(u.username, \'已注销\') AS username, c.create_time, ' +
+            'c.parent_id, IFNULL(pu.username, \'已注销\') AS reply_username, c.status, c.is_pinned, c.images, u.avatar, q.question AS question_title ' +
             'FROM comment c ' +
             'LEFT JOIN user u ON c.user_id = u.userId ' +
             'LEFT JOIN comment pc ON c.parent_id = pc.id ' +
@@ -190,7 +190,7 @@ export default class comment extends Service {
 
       // 2. 数据库分页查顶层评论（替代原全量查 + 内存 slice）
       const rootList: any = await app.mysql.query(
-        'SELECT c.id, c.user_id, c.question_id, c.content, u.username, c.create_time, ' +
+        'SELECT c.id, c.user_id, c.question_id, c.content, IFNULL(u.username, \'已注销\') AS username, c.create_time, ' +
           'c.parent_id, c.status, c.is_pinned, c.images, u.avatar, q.question AS question_title ' +
           'FROM comment c ' +
           'LEFT JOIN user u ON c.user_id = u.userId ' +
@@ -218,8 +218,8 @@ export default class comment extends Service {
       }
       const replyWhereSql = ' WHERE ' + replyWhere.join(' AND ');
       const replyList: any = await app.mysql.query(
-        'SELECT c.id, c.user_id, c.question_id, c.content, u.username, c.create_time, ' +
-          'c.parent_id, pu.username AS reply_username, c.status, c.is_pinned, c.images, u.avatar ' +
+        'SELECT c.id, c.user_id, c.question_id, c.content, IFNULL(u.username, \'已注销\') AS username, c.create_time, ' +
+          'c.parent_id, IFNULL(pu.username, \'已注销\') AS reply_username, c.status, c.is_pinned, c.images, u.avatar ' +
           'FROM comment c ' +
           'LEFT JOIN user u ON c.user_id = u.userId ' +
           'LEFT JOIN comment pc ON c.parent_id = pc.id ' +
@@ -408,8 +408,8 @@ export default class comment extends Service {
     const { app } = this;
     try {
       const result = await app.mysql.query(
-        'SELECT c.id, c.user_id, c.question_id, c.content, u.username, c.create_time, ' +
-          'c.parent_id, pu.username AS reply_username, c.status, c.is_pinned, c.images, u.avatar, ' +
+        'SELECT c.id, c.user_id, c.question_id, c.content, IFNULL(u.username, \'已注销\') AS username, c.create_time, ' +
+          'c.parent_id, IFNULL(pu.username, \'已注销\') AS reply_username, c.status, c.is_pinned, c.images, u.avatar, ' +
           'q.question AS question_title ' +
           'FROM comment c ' +
           'LEFT JOIN user u ON c.user_id = u.userId ' +
@@ -441,6 +441,34 @@ export default class comment extends Service {
       await collect(rootId, ids);
       const result = await app.mysql.query(
         'UPDATE comment SET is_deleted = 0 WHERE id IN (?)',
+        [ ids ],
+      );
+      return result;
+    } catch (err) {
+      return null;
+    }
+  }
+  // 彻底删除评论（连同后代回复物理删除，评论点赞一并清理，不可恢复）
+  public async purgeComment(id) {
+    const { app } = this;
+    try {
+      const rootId = Number(id);
+      const collect = async (parentId: number, acc: number[]) => {
+        const children: any = await app.mysql.select('comment', {
+          where: { parent_id: parentId },
+        });
+        for (const c of children) {
+          acc.push(c.id);
+          await collect(c.id, acc);
+        }
+      };
+      const ids = [ rootId ];
+      await collect(rootId, ids);
+      await app.mysql.query('DELETE FROM comment_like WHERE comment_id IN (?)', [
+        ids,
+      ]);
+      const result = await app.mysql.query(
+        'DELETE FROM comment WHERE id IN (?)',
         [ ids ],
       );
       return result;
