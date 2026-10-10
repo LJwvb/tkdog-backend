@@ -275,6 +275,36 @@ export default class User extends Controller {
         updateData[key] = body[key];
       }
     }
+    // 手机号校验（前端校验不可信，必须在服务端把关）：
+    // 1) 非空且格式合法（11 位，1 开头，第二位 3-9）
+    // 2) 唯一性：不能被改成别人已占用的手机号
+    const phone = updateData.phone;
+    if (phone !== undefined && phone !== null && phone !== '') {
+      const phoneStr = String(phone).trim();
+      if (!/^1[3-9]\d{9}$/.test(phoneStr)) {
+        ctx.fail('请输入正确的手机号~');
+        return;
+      }
+      const dupPhone: any = await ctx.service.user.findByPhone(phoneStr);
+      if (dupPhone && Number(dupPhone.userId) !== Number(ctx.currentUserId())) {
+        ctx.fail('该手机号已被其他账号使用，请更换~');
+        return;
+      }
+      // 归一化：去掉首尾空格后再入库
+      updateData.phone = phoneStr;
+    } else if (phone === '') {
+      ctx.fail('请输入正确的手机号~');
+      return;
+    }
+    // 用户名格式校验：长度 2-20（前端 rules 已有，服务端同样兜底）
+    if (updateData.username !== undefined) {
+      const nameStr = String(updateData.username).trim();
+      if (nameStr.length < 2 || nameStr.length > 20) {
+        ctx.fail('用户名长度需为 2-20 个字符~');
+        return;
+      }
+      updateData.username = nameStr;
+    }
     const check = await ctx.service.sensitiveWord.check(
       [ updateData.username, updateData.personalIntroduction ].filter(Boolean).join(' '),
     );

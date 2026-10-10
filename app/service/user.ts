@@ -310,6 +310,16 @@ export default class User extends Service {
       return null;
     }
   }
+  // 按手机号查用户（用于手机号唯一性校验），排除软删除账号
+  public async findByPhone(phone: string): Promise<any> {
+    const { app } = this;
+    try {
+      return await app.mysql.get('user', { phone, is_deleted: 0 });
+    } catch (err) {
+      return null;
+    }
+  }
+
   // 更新用户信息（按 userId 定位，不依赖 phone）
   public async updateUserInfo(params): Promise<any> {
     const { app } = this;
