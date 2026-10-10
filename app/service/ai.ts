@@ -1039,8 +1039,8 @@ export default class ai extends Service {
     if (!this.isConfigured()) return null;
     const { app } = this;
 
-    // 候选池：已审核题目，按科目/难度过滤
-    const where: Record<string, any> = { chkState: 1 };
+    // 候选池：已审核且未删除的题目，按科目/难度过滤
+    const where: Record<string, any> = { chkState: 1, is_deleted: 0 };
     if (params.subjectID !== undefined && params.subjectID !== '') {
       where.subjectID = params.subjectID;
     }

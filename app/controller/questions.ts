@@ -24,7 +24,11 @@ export default class questions extends Controller {
       ctx.fail('题目id不能为空');
       return;
     }
-    const result = await ctx.service.questions.getQuestionDetail({ id });
+    // 管理员可查看已软删题目（管理端「已删除」列表需要点进详情核对内容），
+    // 普通用户/游客仍严格过滤 is_deleted，避免通过 URL 直接访问已删题。
+    const result = ctx.isAdmin()
+      ? await ctx.service.questions.getQuestionDetailForAdmin(id)
+      : await ctx.service.questions.getQuestionDetail({ id });
     if (result) {
       // 游客（未登录且非管理员）隐藏答案，前端提示登录后可查看
       if (!ctx.currentUserId() && !ctx.isAdmin()) {

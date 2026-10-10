@@ -119,8 +119,11 @@ export default class questions extends Service {
         catalogRows.forEach((item: any) => {
           catalogIdList.push(Number(item.catalogID));
         });
+        // 已下线科目（如 Angular：国内前端岗位占比极低）不展示 tab，历史题仍保留在库中
+        const HIDDEN_SUBJECT_IDS = [ 3 ];
         subjectIdList
           .sort((a: any, b: any) => a - b)
+          .filter((subjectID: any) => !HIDDEN_SUBJECT_IDS.includes(Number(subjectID)))
           .forEach((subjectID: any) => {
             subjectNameList.push({
               subjectID,
@@ -171,12 +174,23 @@ export default class questions extends Service {
       return null;
     }
   }
-  // 题目详情
+  // 题目详情（普通场景：已软删的题不返回）
   public async getQuestionDetail(params) {
     const { app } = this;
     const { id } = params;
     try {
       const result = await app.mysql.get('questions', { id, is_deleted: 0 });
+      return result;
+    } catch (err) {
+      return null;
+    }
+  }
+  // 题目详情（管理端专用：不过滤 is_deleted，便于管理员查看已删除题目内容）
+  // 注意：仅供 controller 在确认 ctx.isAdmin() 后调用，切勿用于点赞/评论等校验链路。
+  public async getQuestionDetailForAdmin(id) {
+    const { app } = this;
+    try {
+      const result = await app.mysql.get('questions', { id });
       return result;
     } catch (err) {
       return null;
@@ -447,9 +461,10 @@ export default class questions extends Service {
     const { id } = params;
     try {
       const questionId = Number(id);
-      // 当前题目
+      // 当前题目（已删除的题不参与相似题推荐）
       const current: any = await app.mysql.get('questions', {
         id: questionId,
+        is_deleted: 0,
       });
       if (!current) return [];
 
