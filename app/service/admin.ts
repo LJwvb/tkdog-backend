@@ -827,6 +827,10 @@ export default class admin extends Service {
       'DELETE FROM answer_record_archive WHERE question_id IN (?)',
       [ questionIds ],
     );
+    // 题目相关的用户通知（审核结果通知带 question_id，属于该题的生命周期数据）
+    await conn.query('DELETE FROM notification WHERE question_id IN (?)', [
+      questionIds,
+    ]);
   }
   // 清理试卷的全部关联数据（题目关联/答题记录/AI试卷报告/作答记录）
   private async purgePaperRelations(

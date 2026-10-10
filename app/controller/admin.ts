@@ -159,19 +159,21 @@ export default class admin extends Controller {
       ctx.fail('审核失败,请重新审核~');
     }
   }
-  // 删除题目
+  // 删除题目（purge=true 时彻底删除：物理删除题目及其关联数据）
   public async deleteQuestions() {
     const { ctx } = this;
-    const { id } = ctx.request.body;
+    const { id, purge } = ctx.request.body;
     if (!id) {
       ctx.fail('请填写完整信息~');
       return;
     }
-    const result = await ctx.service.admin.deleteQuestions({
-      id,
-    });
+    const result = purge
+      ? await ctx.service.admin.purgeQuestion(id)
+      : await ctx.service.admin.deleteQuestions({
+        id,
+      });
     if (result) {
-      ctx.success(null, '删除成功~');
+      ctx.success(null, purge ? '已彻底删除~' : '删除成功~');
     } else {
       ctx.fail('删除失败,请重新删除~');
     }
