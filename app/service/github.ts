@@ -236,13 +236,28 @@ export default class Github extends Service {
         return { deleted: true };
       }
       if (user) {
-        // 已有账号，更新头像和最后登录时间
-        await app.mysql.update(
-          'user',
-          { avatar, last_login_time: getNowFormatDate() },
-          { where: { userId: user.userId } },
-        );
-        user.avatar = avatar;
+        // 已有账号：只刷新最后登录时间。
+        // 头像策略（2026-10-08 修复）：若用户上传过自定义头像（非 gh_ 转存文件），不覆盖，
+        // 否则每次 GitHub 登录都会把用户设置的头像重置回 GitHub 原图。
+        // avatar 为空或以 /public/uploads/gh_ 开头（= 之前从 GitHub 转存的）才刷新，
+        // 这样 GitHub 端更换头像后仍能自动同步到本站。
+        const isGhAvatar =
+          typeof user.avatar === 'string' && user.avatar.includes('/gh_');
+        if (!user.avatar || isGhAvatar) {
+          await app.mysql.update(
+            'user',
+            { avatar, last_login_time: getNowFormatDate() },
+            { where: { userId: user.userId } },
+          );
+          user.avatar = avatar;
+        } else {
+          // 保留用户自定义头像，仅更新登录时间
+          await app.mysql.update(
+            'user',
+            { last_login_time: getNowFormatDate() },
+            { where: { userId: user.userId } },
+          );
+        }
         return user;
       }
 
@@ -254,14 +269,25 @@ export default class Github extends Service {
           return { deleted: true };
         }
         if (user) {
-          // 绑定 github_id 到已有账号
+          // 绑定 github_id 到已有账号（同样保留用户自定义头像，逻辑同上）
+          const isGhAvatar =
+            typeof user.avatar === 'string' && user.avatar.includes('/gh_');
+          const updateData: Record<string, unknown> = {
+            github_id: githubId,
+            last_login_time: getNowFormatDate(),
+          };
+          if (!user.avatar || isGhAvatar) {
+            updateData.avatar = avatar;
+          }
           await app.mysql.update(
             'user',
-            { github_id: githubId, avatar, last_login_time: getNowFormatDate() },
+            updateData,
             { where: { userId: user.userId } },
           );
           user.github_id = githubId;
-          user.avatar = avatar;
+          if (updateData.avatar) {
+            user.avatar = avatar as string;
+          }
           return user;
         }
       }
