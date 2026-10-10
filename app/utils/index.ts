@@ -55,7 +55,7 @@ function getSubjectName(subjectID) {
       subjectName = 'Node';
       break;
     case 7:
-      subjectName = 'Webpack';
+      subjectName = '工程化';
       break;
     case 8:
       subjectName = 'TypeScript';
@@ -64,10 +64,13 @@ function getSubjectName(subjectID) {
       subjectName = 'Git';
       break;
     case 10:
-      subjectName = 'HTTP';
+      subjectName = '网络';
       break;
     case 11:
       subjectName = '浏览器';
+      break;
+    case 12:
+      subjectName = '手写题';
       break;
     default:
       subjectName = '其他';
@@ -106,10 +109,6 @@ export const subjectList = [
     subjectID: 2,
   },
   {
-    content: 'Angular',
-    subjectID: 3,
-  },
-  {
     content: 'React',
     subjectID: 4,
   },
@@ -122,7 +121,7 @@ export const subjectList = [
     subjectID: 6,
   },
   {
-    content: 'Webpack',
+    content: '工程化',
     subjectID: 7,
   },
   {
@@ -134,7 +133,7 @@ export const subjectList = [
     subjectID: 9,
   },
   {
-    content: 'HTTP',
+    content: '网络',
     subjectID: 10,
   },
   {
@@ -142,8 +141,12 @@ export const subjectList = [
     subjectID: 11,
   },
   {
-    content: '其他',
+    content: '手写题',
     subjectID: 12,
+  },
+  {
+    content: '其他',
+    subjectID: 13,
   },
 ];
 const transFromName = (chkState: number) => {
