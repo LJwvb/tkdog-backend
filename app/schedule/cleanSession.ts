@@ -3,7 +3,7 @@ import { Subscription } from 'egg';
 /**
  * 定时清理过期的 session 记录
  *
- * session 表存储框架会话（cookie EGG_SESS），其中已过期的数据不再被使用，
+ * session 表存储框架会话（cookie 名见 config.session.key，现为 tkdog_sid），其中已过期的数据不再被使用，
  * 长期累积会占用存储并拖慢扫描。该任务每小时清理一次过期记录。
  *
  * schedule 说明：

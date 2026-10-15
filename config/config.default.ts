@@ -12,8 +12,23 @@ export default (_appInfo: EggAppInfo) => {
   // 避免硬编码弱密钥导致 ADMIN_SESS cookie 被伪造提权。
   config.keys = process.env.COOKIE_KEYS || randomBytes(32).toString('hex');
 
+  // session cookie 名：框架默认叫 EGG_SESS，浏览器里一眼就能看出后端用的是 Egg，
+  // 改成中性名字（与图库 PHP 侧的 gallery_sid 保持同一命名风格）。
+  // 只改 cookie 名，签名密钥仍是 config.keys；浏览器里遗留的老 cookie 由
+  // app/middleware/clearLegacySessionCookie.ts 主动清掉。
+  // 注意：session 里只放验证码答案 md5 与 GitHub OAuth state，
+  // 用户登录态走 JWT（Authorization 头，见 app/extend/context.ts 的 currentUserId），
+  // 因此改名不会把在线用户踢下线，仅需重新获取一次验证码。
+  config.session = {
+    key: 'tkdog_sid',
+    maxAge: 24 * 3600 * 1000, // 24h，与框架默认一致
+    httpOnly: true,
+    signed: true,
+    encrypt: false, // 只签名不加密（session 里没有敏感明文）
+  };
+
   // add your egg config in here
-  config.middleware = [ 'requestLog' ];
+  config.middleware = [ 'clearLegacySessionCookie', 'requestLog' ];
   config.security = {
     csrf: {
       enable: false,
