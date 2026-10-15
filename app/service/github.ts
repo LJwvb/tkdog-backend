@@ -3,6 +3,7 @@ import * as https from 'https';
 import fs from 'fs';
 import path from 'path';
 import { getNowFormatDate } from '../utils';
+import { detectImageFormat, toWebpBuffer } from '../utils/webp';
 import bcrypt from 'bcryptjs';
 // 日志脱敏：替换 access_token / client_secret 等敏感字段值，避免明文入日志
 function maskSensitive(text: string): string {
@@ -202,13 +203,25 @@ export default class Github extends Service {
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir);
       }
-      // GitHub 头像多为 JPEG，按 magic bytes 定扩展名
-      const isPng = buf[0] === 0x89 && buf[1] === 0x50;
-      const isGif = buf.toString('ascii', 0, 3) === 'GIF';
-      const ext = isPng ? '.png' : isGif ? '.gif' : '.jpg';
+      // GitHub 头像多为 JPEG；除 GIF 外统一转 webp 再落盘（转码失败保留原格式，不影响登录）
+      const format = detectImageFormat(buf);
+      const isGif = format === 'gif';
+      let data = buf;
+      let ext = format === 'png' ? '.png' : isGif ? '.gif' : '.jpg';
+      if (!isGif) {
+        const converted = await toWebpBuffer(buf, format);
+        if (converted) {
+          data = converted;
+          ext = '.webp';
+        }
+      }
       const filename = `gh_${githubId}_${Date.now()}${ext}`;
-      fs.writeFileSync(path.join(dir, filename), buf);
-      this.ctx.logger.info('[GitHub mirrorAvatar] 头像已转存:', filename, `(${buf.length} bytes)`);
+      fs.writeFileSync(path.join(dir, filename), data);
+      this.ctx.logger.info(
+        '[GitHub mirrorAvatar] 头像已转存:',
+        filename,
+        `(${format || 'unknown'} ${buf.length}B → ${data.length}B)`,
+      );
       return `/public/uploads/${filename}`;
     } catch (e) {
       this.ctx.logger.error('[GitHub mirrorAvatar] 写文件失败，降级使用原 URL:', e);

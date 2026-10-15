@@ -1,6 +1,7 @@
 import { Controller } from 'egg';
 import fs from 'fs';
 import path from 'path';
+import { detectImageFormat, toWebpBuffer } from '../utils/webp';
 
 // 校验图片文件头（magic bytes），防止伪装扩展名的非图片内容上传
 function isImageFile(header: Buffer, ext: string): boolean {
@@ -90,8 +91,9 @@ export default class upload extends Controller {
         return;
       }
       // 校验文件真实格式（magic bytes），防止伪装扩展名的非图片内容上传
-      const header = fs.readFileSync(target).slice(0, 12);
-      if (!isImageFile(header, ext)) {
+      const fileBuf = fs.readFileSync(target);
+      const format = detectImageFormat(fileBuf);
+      if (!format || !isImageFile(fileBuf.slice(0, 12), ext)) {
         try {
           fs.unlinkSync(target);
         } catch {
@@ -100,7 +102,24 @@ export default class upload extends Controller {
         ctx.fail('文件内容与图片格式不符~');
         return;
       }
-      ctx.success({ url: `/public/uploads/${filename}` }, '上传成功');
+      // 【统一格式】除 GIF 动图外一律转成 webp 落盘（GIF 是唯一例外：转码会丢掉动画帧）。
+      // 前端已经会先转一道，这里是服务端兜底：直连接口传 jpg/png 也存成 webp。
+      let finalName = filename;
+      if (format !== 'gif' && format !== 'webp') {
+        const converted = await toWebpBuffer(fileBuf, format);
+        if (converted) {
+          finalName = filename.replace(/\.[^.]+$/, '.webp');
+          fs.writeFileSync(path.join(dir, finalName), converted);
+          fs.unlinkSync(target);
+          ctx.logger.info(
+            `[uploadImage] ${format} → webp：${filename}(${fileBuf.length}B) → ${finalName}(${converted.length}B)`,
+          );
+        } else {
+          // 转码失败就保留原格式，不能让上传直接失败
+          ctx.logger.warn(`[uploadImage] webp 转码失败，保留原格式：${filename}`);
+        }
+      }
+      ctx.success({ url: `/public/uploads/${finalName}` }, '上传成功');
     } catch (err) {
       ctx.fail('上传失败~');
     }
